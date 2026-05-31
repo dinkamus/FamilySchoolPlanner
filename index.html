@@ -439,7 +439,7 @@ const DAYS_SHORT = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'];
 // ─── INITIAL DATA ─────────────────────────────────────────────────────────────
 const INITIAL_CHILDREN = [
   {
-    id:'c1', name:'Ару', surname:'', class:'9А', age:15, school:'Школа №1', color:'blue',
+    id:'c1', name:'Ару', surname:'', class:'UCI', age:15, school:'UCI', color:'blue',
     accessLevel:'suggest', accessToken:'tok-aru-001',
     lessons:[
       {id:'l1',row:0,day:0,name:'Алгебра',type:'school'},
@@ -461,7 +461,7 @@ const INITIAL_CHILDREN = [
     ],
   },
   {
-    id:'c2', name:'Мика', surname:'', class:'7Б', age:13, school:'Школа №3', color:'green',
+    id:'c2', name:'Мика', surname:'', class:'UCL', age:13, school:'UCL', color:'green',
     accessLevel:'suggest', accessToken:'tok-mika-002',
     lessons:[
       {id:'l7',row:0,day:0,name:'Математика',type:'school'},
@@ -483,7 +483,7 @@ const INITIAL_CHILDREN = [
     ],
   },
   {
-    id:'c3', name:'Бони', surname:'', class:'4В', age:10, school:'Школа №7', color:'pink',
+    id:'c3', name:'Бони', surname:'', class:'4В', age:10, school:'Concord', color:'pink',
     accessLevel:'view', accessToken:'tok-boni-003',
     lessons:[
       {id:'l13',row:0,day:0,name:'Чтение',type:'school'},
@@ -503,7 +503,7 @@ const INITIAL_CHILDREN = [
     ],
   },
   {
-    id:'c4', name:'Коси', surname:'', class:'2А', age:8, school:'Школа №7', color:'amber',
+    id:'c4', name:'Коси', surname:'', class:'4А', age:8, school:'Нурорда', color:'amber',
     accessLevel:'view', accessToken:'tok-abdi-004',
     lessons:[
       {id:'l18',row:0,day:0,name:'Чтение',type:'school'},
@@ -533,7 +533,7 @@ const INITIAL_CHILDREN = [
     ],
   },
   {
-    id:'c5', name:'Роки', surname:'', class:'1Б', age:7, school:'Школа №7', color:'purple',
+    id:'c5', name:'Роки', surname:'', class:'Садик', age:7, school:'Spectrum', color:'purple',
     accessLevel:'view', accessToken:'tok-roki-005',
     lessons:[
       {id:'l22',row:0,day:0,name:'Азбука',type:'school'},
@@ -570,16 +570,16 @@ const INITIAL_EXPENSES = [
 ];
 
 const INITIAL_NOTIFICATIONS = [
-  {id:'n1',childId:'c1',school:'Школа №1',text:'Родительское собрание 5 июня в 18:00. Явка обязательна.',time:'2 часа назад',read:false,icon:'📢'},
-  {id:'n2',childId:'c2',school:'Школа №3',text:'Олимпиада по математике перенесена на 10 июня.',time:'Вчера',read:false,icon:'📝'},
-  {id:'n3',childId:'c3',school:'Школа №7',text:'Праздник последнего звонка — 25 мая в 10:00.',time:'3 дня назад',read:true,icon:'🎉'},
-  {id:'n4',childId:'c1',school:'Школа №1',text:'Напоминание: сдать взносы на учебники до 7 июня.',time:'4 дня назад',read:true,icon:'💰'},
-  {id:'n5',childId:'c2',school:'Школа №3',text:'Спортивные соревнования 15 июня. Нужна справка от врача.',time:'5 дней назад',read:false,icon:'🏅'},
-  {id:'n6',childId:'c4',school:'Школа №7',text:'Утренник 30 мая в 10:00. Просьба прийти в праздничной одежде.',time:'1 день назад',read:false,icon:'🎉'},
-  {id:'n7',childId:'c5',school:'Школа №7',text:'Медосмотр 8 июня. Принести медкарту.',time:'2 дня назад',read:false,icon:'🏥'},
-  {id:'n8',childId:'c4',school:'Школа №7',text:'Дорогие родители, 5 июня в 10:00 состоится торжественная линейка. Просим не опаздывать.',time:'Только что',read:false,icon:'📢'},
-  {id:'n9',childId:'c4',school:'Школа №7',text:'Коси, не забудь сдать деньги на учебники до 10 июня — 3 000 ₸.',time:'1 час назад',read:false,icon:'💰'},
-  {id:'n10',childId:'c4',school:'Школа №7',text:'Напоминание: каникулы начинаются 1 июня. Хорошего отдыха!',time:'Сегодня',read:false,icon:'🏖️'},
+  {id:'n1',childId:'c1',school:'UCI',text:'Родительское собрание 5 июня в 18:00. Явка обязательна.',time:'2 часа назад',read:false,icon:'📢'},
+  {id:'n2',childId:'c2',school:'UCL',text:'Олимпиада по математике перенесена на 10 июня.',time:'Вчера',read:false,icon:'📝'},
+  {id:'n3',childId:'c3',school:'Concord',text:'Праздник последнего звонка — 25 мая в 10:00.',time:'3 дня назад',read:true,icon:'🎉'},
+  {id:'n4',childId:'c1',school:'UCI',text:'Напоминание: сдать взносы на учебники до 7 июня.',time:'4 дня назад',read:true,icon:'💰'},
+  {id:'n5',childId:'c2',school:'UCL',text:'Спортивные соревнования 15 июня. Нужна справка от врача.',time:'5 дней назад',read:false,icon:'🏅'},
+  {id:'n6',childId:'c4',school:'Нурорда',text:'Утренник 30 мая в 10:00. Просьба прийти в праздничной одежде.',time:'1 день назад',read:false,icon:'🎉'},
+  {id:'n7',childId:'c5',school:'Spectrum',text:'Медосмотр 8 июня. Принести медкарту.',time:'2 дня назад',read:false,icon:'🏥'},
+  {id:'n8',childId:'c4',school:'Нурорда',text:'Дорогие родители, 5 июня в 10:00 состоится торжественная линейка. Просим не опаздывать.',time:'Только что',read:false,icon:'📢'},
+  {id:'n9',childId:'c4',school:'Нурорда',text:'Коси, не забудь сдать деньги на учебники до 10 июня — 3 000 ₸.',time:'1 час назад',read:false,icon:'💰'},
+  {id:'n10',childId:'c4',school:'Нурорда',text:'Напоминание: каникулы начинаются 1 июня. Хорошего отдыха!',time:'Сегодня',read:false,icon:'🏖️'},
 ];
 
 const INITIAL_CHANGE_REQUESTS = [
