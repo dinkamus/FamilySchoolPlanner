@@ -143,6 +143,7 @@ const USER_ROLES = {
   'batyrbekaruzhan00@gmail.com':  { role:'child',  label:'Ару',   childId: 'c1' },
   'batyrbekbirganym@gmail.com':   { role:'child',  label:'Мика',  childId: 'c2' },
   'batyrbekaldiyar2@gmail.com':   { role:'child',  label:'Бони',  childId: 'c3' },
+  'dinka.musinsa@gmail.com':      { role:'child',  label:'Коси',  childId: 'c4' },
 };
 
 const ALLOWED_EMAILS = Object.keys(USER_ROLES);
@@ -341,6 +342,7 @@ function AuthScreen({ onAuth }) {
                     {label:'🧒 Ару',    email:'batyrbekaruzhan00@gmail.com', color:'bg-sky-50 border-sky-200 text-sky-700 hover:bg-sky-100'},
                     {label:'🧒 Мика',   email:'batyrbekbirganym@gmail.com',  color:'bg-green-50 border-green-200 text-green-700 hover:bg-green-100'},
                     {label:'🧒 Бони',   email:'batyrbekaldiyar2@gmail.com',  color:'bg-pink-50 border-pink-200 text-pink-700 hover:bg-pink-100'},
+                    {label:'🧒 Коси',   email:'dinka.musinsa@gmail.com',     color:'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100'},
                   ].map(u=>(
                     <button key={u.email} type="button"
                       onClick={()=>setEmail(u.email)}
@@ -501,17 +503,29 @@ const INITIAL_CHILDREN = [
     ],
   },
   {
-    id:'c4', name:'Абдикош', surname:'', class:'2А', age:8, school:'Школа №7', color:'amber',
+    id:'c4', name:'Коси', surname:'', class:'2А', age:8, school:'Школа №7', color:'amber',
     accessLevel:'view', accessToken:'tok-abdi-004',
     lessons:[
       {id:'l18',row:0,day:0,name:'Чтение',type:'school'},
       {id:'l19',row:1,day:0,name:'Математика',type:'school'},
-      {id:'l20',row:2,day:2,name:'Рисование',type:'extra'},
-      {id:'l21',row:3,day:4,name:'Физкультура',type:'sport'},
+      {id:'l20',row:2,day:0,name:'Казахский яз.',type:'school'},
+      {id:'l21',row:0,day:1,name:'Русский яз.',type:'school'},
+      {id:'l22',row:1,day:1,name:'Математика',type:'school'},
+      {id:'l23',row:2,day:1,name:'Природоведение',type:'school'},
+      {id:'l24',row:0,day:2,name:'Чтение',type:'school'},
+      {id:'l25',row:1,day:2,name:'Математика',type:'school'},
+      {id:'l26',row:2,day:2,name:'Рисование',type:'extra'},
+      {id:'l27',row:0,day:3,name:'Казахский яз.',type:'school'},
+      {id:'l28',row:1,day:3,name:'Русский яз.',type:'school'},
+      {id:'l29',row:2,day:3,name:'Музыка',type:'music'},
+      {id:'l30',row:0,day:4,name:'Математика',type:'school'},
+      {id:'l31',row:1,day:4,name:'Чтение',type:'school'},
+      {id:'l32',row:2,day:4,name:'Физкультура',type:'sport'},
     ],
     grades:[
       {id:'g12',date:'2026-05-20',subject:'Математика',score:4,workType:'Контрольная'},
       {id:'g13',date:'2026-05-24',subject:'Чтение',score:5,workType:'Устный ответ'},
+      {id:'g16',date:'2026-05-28',subject:'Казахский яз.',score:4,workType:'Диктант'},
     ],
     vacations:[
       {id:'v7',name:'Летние каникулы',start:'2026-06-01',end:'2026-08-31'},
@@ -563,6 +577,9 @@ const INITIAL_NOTIFICATIONS = [
   {id:'n5',childId:'c2',school:'Школа №3',text:'Спортивные соревнования 15 июня. Нужна справка от врача.',time:'5 дней назад',read:false,icon:'🏅'},
   {id:'n6',childId:'c4',school:'Школа №7',text:'Утренник 30 мая в 10:00. Просьба прийти в праздничной одежде.',time:'1 день назад',read:false,icon:'🎉'},
   {id:'n7',childId:'c5',school:'Школа №7',text:'Медосмотр 8 июня. Принести медкарту.',time:'2 дня назад',read:false,icon:'🏥'},
+  {id:'n8',childId:'c4',school:'Школа №7',text:'Дорогие родители, 5 июня в 10:00 состоится торжественная линейка. Просим не опаздывать.',time:'Только что',read:false,icon:'📢'},
+  {id:'n9',childId:'c4',school:'Школа №7',text:'Коси, не забудь сдать деньги на учебники до 10 июня — 3 000 ₸.',time:'1 час назад',read:false,icon:'💰'},
+  {id:'n10',childId:'c4',school:'Школа №7',text:'Напоминание: каникулы начинаются 1 июня. Хорошего отдыха!',time:'Сегодня',read:false,icon:'🏖️'},
 ];
 
 const INITIAL_CHANGE_REQUESTS = [
@@ -1604,13 +1621,19 @@ function AddExpenseModal({ children, onClose, onSave, fixedChildId }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // TAB: NOTIFICATIONS
 // ═══════════════════════════════════════════════════════════════════════════════
-function NotificationsTab({ children, notifications, setNotifications, toast }) {
+function NotificationsTab({ children, notifications, setNotifications, toast, isParent, myChildId }) {
   const [showAdd, setShowAdd] = useState(false);
 
-  const unread = notifications.filter(n=>!n.read).length;
+  // Дети видят только свои уведомления
+  const visible = isParent ? notifications : notifications.filter(n=>n.childId===myChildId);
+  const unread = visible.filter(n=>!n.read).length;
 
   function markRead(id) { setNotifications(prev=>prev.map(n=>n.id===id?{...n,read:true}:n)); }
-  function markAllRead() { setNotifications(prev=>prev.map(n=>({...n,read:true}))); toast('Все прочитаны ✓'); }
+  function markAllRead() {
+    const ids = new Set(visible.map(n=>n.id));
+    setNotifications(prev=>prev.map(n=>ids.has(n.id)?{...n,read:true}:n));
+    toast('Все прочитаны ✓');
+  }
 
   function addNotification(data) {
     setNotifications(prev=>[{ id:uid(), ...data, time:'Только что', read:false }, ...prev]);
@@ -1622,17 +1645,19 @@ function NotificationsTab({ children, notifications, setNotifications, toast }) 
     <div>
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-2">
-          <h2 className="font-semibold text-gray-800">Уведомления от школ</h2>
+          <h2 className="font-semibold text-gray-800">
+            {isParent ? 'Уведомления от школ' : 'Мои уведомления от школы'}
+          </h2>
           {unread>0&&<span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">{unread}</span>}
         </div>
         <div className="flex gap-2">
           {unread>0&&<Btn variant="secondary" onClick={markAllRead}>Прочитать все</Btn>}
-          <Btn onClick={()=>setShowAdd(true)}>+ Уведомление</Btn>
+          {isParent&&<Btn onClick={()=>setShowAdd(true)}>+ Уведомление</Btn>}
         </div>
       </div>
 
       <div className="space-y-3">
-        {notifications.map(n=>{
+        {visible.map(n=>{
           const ch=children.find(c=>c.id===n.childId);
           const c=ch?COLORS[ch.color]:COLORS.blue;
           return (
@@ -1654,7 +1679,7 @@ function NotificationsTab({ children, notifications, setNotifications, toast }) 
             </div>
           );
         })}
-        {notifications.length===0&&<p className="text-gray-400 text-sm">Уведомлений нет</p>}
+        {visible.length===0&&<p className="text-gray-400 text-sm">Уведомлений нет</p>}
       </div>
 
       {showAdd&&<AddNotificationModal children={children} onClose={()=>setShowAdd(false)} onSave={addNotification}/>}
@@ -2501,7 +2526,7 @@ function MainApp({ user, onLogout }) {
     { id:'budget',       label:'Бюджет',             icon:'💰' },
     { id:'dina',         label:'Мама',               icon:'👩', parentOnly:true },
     { id:'spouse',       label:'Папа',               icon:'👨', parentOnly:true },
-    { id:'notifications',label:'Уведомления',        icon:'🔔', badge:unreadCount, parentOnly:true },
+    { id:'notifications',label:'Уведомления',        icon:'🔔', badge:unreadCount },
   ];
   const TABS = ALL_TABS.filter(t => isParent || !t.parentOnly);
 
@@ -2629,8 +2654,8 @@ function MainApp({ user, onLogout }) {
         {activeTab==='spouse' && isParent && (
           <SpouseTab toast={toast}/>
         )}
-        {activeTab==='notifications' && isParent && (
-          <NotificationsTab children={children} notifications={notifications} setNotifications={setNotifications} toast={toast}/>
+        {activeTab==='notifications' && (
+          <NotificationsTab children={children} notifications={notifications} setNotifications={setNotifications} toast={toast} isParent={isParent} myChildId={myChildId}/>
         )}
       </main>
 
