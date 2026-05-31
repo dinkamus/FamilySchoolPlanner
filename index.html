@@ -53,10 +53,10 @@ const DAYS_SHORT = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'];
 // ─── INITIAL DATA ─────────────────────────────────────────────────────────────
 const INITIAL_CHILDREN = [
   {
-    id:'c1', name:'Айгерим', surname:'Мусина', class:'5A', age:11, school:'Школа №1', color:'blue',
-    accessLevel:'view', accessToken:'tok-aigm-001',
+    id:'c1', name:'Ару', surname:'', class:'9А', age:15, school:'Школа №1', color:'blue',
+    accessLevel:'suggest', accessToken:'tok-aru-001',
     lessons:[
-      {id:'l1',row:0,day:0,name:'Математика',type:'school'},
+      {id:'l1',row:0,day:0,name:'Алгебра',type:'school'},
       {id:'l2',row:1,day:0,name:'Русский яз.',type:'school'},
       {id:'l3',row:2,day:1,name:'Биология',type:'school'},
       {id:'l4',row:4,day:2,name:'Рисование',type:'extra'},
@@ -64,10 +64,10 @@ const INITIAL_CHILDREN = [
       {id:'l6',row:6,day:4,name:'Волейбол',type:'sport'},
     ],
     grades:[
-      {id:'g1',date:'2026-05-20',subject:'Математика',score:5,workType:'Контрольная'},
+      {id:'g1',date:'2026-05-20',subject:'Алгебра',score:5,workType:'Контрольная'},
       {id:'g2',date:'2026-05-22',subject:'Русский яз.',score:4,workType:'Диктант'},
       {id:'g3',date:'2026-05-25',subject:'Биология',score:5,workType:'Тест'},
-      {id:'g4',date:'2026-05-28',subject:'Математика',score:4,workType:'Домашнее задание'},
+      {id:'g4',date:'2026-05-28',subject:'Алгебра',score:4,workType:'Домашнее задание'},
     ],
     vacations:[
       {id:'v1',name:'Летние каникулы',start:'2026-06-01',end:'2026-08-31'},
@@ -75,10 +75,10 @@ const INITIAL_CHILDREN = [
     ],
   },
   {
-    id:'c2', name:'Данияр', surname:'Мусин', class:'8Б', age:14, school:'Школа №3', color:'green',
-    accessLevel:'suggest', accessToken:'tok-dan-002',
+    id:'c2', name:'Мика', surname:'', class:'7Б', age:13, school:'Школа №3', color:'green',
+    accessLevel:'suggest', accessToken:'tok-mika-002',
     lessons:[
-      {id:'l7',row:0,day:0,name:'Алгебра',type:'school'},
+      {id:'l7',row:0,day:0,name:'Математика',type:'school'},
       {id:'l8',row:1,day:0,name:'Физика',type:'school'},
       {id:'l9',row:2,day:1,name:'История',type:'school'},
       {id:'l10',row:3,day:2,name:'Химия',type:'school'},
@@ -86,10 +86,10 @@ const INITIAL_CHILDREN = [
       {id:'l12',row:6,day:4,name:'Футбол',type:'sport'},
     ],
     grades:[
-      {id:'g5',date:'2026-05-18',subject:'Алгебра',score:3,workType:'Контрольная'},
+      {id:'g5',date:'2026-05-18',subject:'Математика',score:4,workType:'Контрольная'},
       {id:'g6',date:'2026-05-21',subject:'Физика',score:4,workType:'Тест'},
       {id:'g7',date:'2026-05-24',subject:'История',score:5,workType:'Устный ответ'},
-      {id:'g8',date:'2026-05-29',subject:'Алгебра',score:4,workType:'Домашнее задание'},
+      {id:'g8',date:'2026-05-29',subject:'Математика',score:3,workType:'Домашнее задание'},
     ],
     vacations:[
       {id:'v3',name:'Летние каникулы',start:'2026-06-01',end:'2026-08-31'},
@@ -97,8 +97,8 @@ const INITIAL_CHILDREN = [
     ],
   },
   {
-    id:'c3', name:'Зарина', surname:'Мусина', class:'2В', age:8, school:'Школа №7', color:'pink',
-    accessLevel:'view', accessToken:'tok-zar-003',
+    id:'c3', name:'Бони', surname:'', class:'4В', age:10, school:'Школа №7', color:'pink',
+    accessLevel:'view', accessToken:'tok-boni-003',
     lessons:[
       {id:'l13',row:0,day:0,name:'Чтение',type:'school'},
       {id:'l14',row:1,day:0,name:'Математика',type:'school'},
@@ -116,6 +116,42 @@ const INITIAL_CHILDREN = [
       {id:'v6',name:'Осенние каникулы',start:'2026-10-27',end:'2026-11-01'},
     ],
   },
+  {
+    id:'c4', name:'Абдикош', surname:'', class:'2А', age:8, school:'Школа №7', color:'amber',
+    accessLevel:'view', accessToken:'tok-abdi-004',
+    lessons:[
+      {id:'l18',row:0,day:0,name:'Чтение',type:'school'},
+      {id:'l19',row:1,day:0,name:'Математика',type:'school'},
+      {id:'l20',row:2,day:2,name:'Рисование',type:'extra'},
+      {id:'l21',row:3,day:4,name:'Физкультура',type:'sport'},
+    ],
+    grades:[
+      {id:'g12',date:'2026-05-20',subject:'Математика',score:4,workType:'Контрольная'},
+      {id:'g13',date:'2026-05-24',subject:'Чтение',score:5,workType:'Устный ответ'},
+    ],
+    vacations:[
+      {id:'v7',name:'Летние каникулы',start:'2026-06-01',end:'2026-08-31'},
+      {id:'v8',name:'Осенние каникулы',start:'2026-10-27',end:'2026-11-01'},
+    ],
+  },
+  {
+    id:'c5', name:'Роки', surname:'', class:'1Б', age:7, school:'Школа №7', color:'purple',
+    accessLevel:'view', accessToken:'tok-roki-005',
+    lessons:[
+      {id:'l22',row:0,day:0,name:'Азбука',type:'school'},
+      {id:'l23',row:1,day:0,name:'Математика',type:'school'},
+      {id:'l24',row:2,day:3,name:'Рисование',type:'extra'},
+      {id:'l25',row:3,day:4,name:'Физкультура',type:'sport'},
+    ],
+    grades:[
+      {id:'g14',date:'2026-05-21',subject:'Математика',score:5,workType:'Контрольная'},
+      {id:'g15',date:'2026-05-26',subject:'Азбука',score:5,workType:'Устный ответ'},
+    ],
+    vacations:[
+      {id:'v9',name:'Летние каникулы',start:'2026-06-01',end:'2026-08-31'},
+      {id:'v10',name:'Осенние каникулы',start:'2026-10-27',end:'2026-11-01'},
+    ],
+  },
 ];
 
 const INITIAL_EXPENSES = [
@@ -128,6 +164,11 @@ const INITIAL_EXPENSES = [
   {id:'e7',childId:'c3',category:'Школьный сбор',amount:12000,date:'2026-05-01',status:'paid'},
   {id:'e8',childId:'c3',category:'Форма / одежда',amount:18000,date:'2026-05-08',status:'paid'},
   {id:'e9',childId:'c3',category:'Питание',amount:9000,date:'2026-05-30',status:'pending'},
+  {id:'e10',childId:'c4',category:'Школьный сбор',amount:12000,date:'2026-05-01',status:'paid'},
+  {id:'e11',childId:'c4',category:'Учебники',amount:7000,date:'2026-05-14',status:'paid'},
+  {id:'e12',childId:'c5',category:'Школьный сбор',amount:10000,date:'2026-05-01',status:'paid'},
+  {id:'e13',childId:'c5',category:'Форма / одежда',amount:15000,date:'2026-05-05',status:'paid'},
+  {id:'e14',childId:'c5',category:'Питание',amount:8000,date:'2026-05-30',status:'pending'},
 ];
 
 const INITIAL_NOTIFICATIONS = [
@@ -136,6 +177,8 @@ const INITIAL_NOTIFICATIONS = [
   {id:'n3',childId:'c3',school:'Школа №7',text:'Праздник последнего звонка — 25 мая в 10:00.',time:'3 дня назад',read:true,icon:'🎉'},
   {id:'n4',childId:'c1',school:'Школа №1',text:'Напоминание: сдать взносы на учебники до 7 июня.',time:'4 дня назад',read:true,icon:'💰'},
   {id:'n5',childId:'c2',school:'Школа №3',text:'Спортивные соревнования 15 июня. Нужна справка от врача.',time:'5 дней назад',read:false,icon:'🏅'},
+  {id:'n6',childId:'c4',school:'Школа №7',text:'Утренник 30 мая в 10:00. Просьба прийти в праздничной одежде.',time:'1 день назад',read:false,icon:'🎉'},
+  {id:'n7',childId:'c5',school:'Школа №7',text:'Медосмотр 8 июня. Принести медкарту.',time:'2 дня назад',read:false,icon:'🏥'},
 ];
 
 const INITIAL_CHANGE_REQUESTS = [
@@ -144,6 +187,14 @@ const INITIAL_CHANGE_REQUESTS = [
 
 const INITIAL_TRIPS = [
   {id:'t1',name:'Летний отпуск в Алматы',start:'2026-07-10',end:'2026-07-25'},
+];
+
+const INITIAL_SPOUSE_TRIPS = [
+  {id:'st1',city:'Астана',purpose:'Конференция',start:'2026-06-05',end:'2026-06-08',status:'upcoming'},
+  {id:'st2',city:'Москва',purpose:'Переговоры с партнёрами',start:'2026-06-20',end:'2026-06-25',status:'upcoming'},
+  {id:'st3',city:'Дубай',purpose:'Выставка',start:'2026-07-03',end:'2026-07-07',status:'upcoming'},
+  {id:'st4',city:'Алматы',purpose:'Обучение',start:'2026-05-12',end:'2026-05-14',status:'done'},
+  {id:'st5',city:'Шымкент',purpose:'Рабочая встреча',start:'2026-04-20',end:'2026-04-21',status:'done'},
 ];
 
 // ─── UTILS ───────────────────────────────────────────────────────────────────
@@ -1262,6 +1313,197 @@ function AddChildModal({ onClose, onSave }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// TAB: SPOUSE TRIPS
+// ═══════════════════════════════════════════════════════════════════════════════
+function SpouseTab({ toast }) {
+  const [trips, setTrips] = useState(INITIAL_SPOUSE_TRIPS);
+  const [showAdd, setShowAdd] = useState(false);
+  const [spouseName, setSpouseName] = useState('Супруг');
+  const [editName, setEditName] = useState(false);
+  const [nameInput, setNameInput] = useState('Супруг');
+
+  const upcoming = trips.filter(t=>t.status==='upcoming').sort((a,b)=>a.start.localeCompare(b.start));
+  const done = trips.filter(t=>t.status==='done').sort((a,b)=>b.start.localeCompare(a.start));
+
+  const totalDaysAway = trips.reduce((s,t)=>{
+    return s + Math.ceil((isoToDate(t.end)-isoToDate(t.start))/(1000*60*60*24))+1;
+  },0);
+
+  const upcomingDays = upcoming.reduce((s,t)=>{
+    return s + Math.ceil((isoToDate(t.end)-isoToDate(t.start))/(1000*60*60*24))+1;
+  },0);
+
+  function addTrip(data) {
+    setTrips(prev=>[{ id:uid(), ...data }, ...prev]);
+    setShowAdd(false);
+    toast('Командировка добавлена ✓');
+  }
+
+  function removeTrip(id) {
+    setTrips(prev=>prev.filter(t=>t.id!==id));
+    toast('Командировка удалена');
+  }
+
+  function markDone(id) {
+    setTrips(prev=>prev.map(t=>t.id===id?{...t,status:'done'}:t));
+    toast('Отмечено как завершённое ✓');
+  }
+
+  // Next trip countdown
+  const nextTrip = upcoming[0];
+  const today = new Date().toISOString().slice(0,10);
+  const daysToNext = nextTrip ? Math.ceil((isoToDate(nextTrip.start)-new Date())/(1000*60*60*24)) : null;
+
+  return (
+    <div className="space-y-5">
+      {/* Header with name edit */}
+      <div className="flex items-center gap-3">
+        <div className="w-12 h-12 rounded-full bg-gray-700 text-white flex items-center justify-center text-xl font-bold">
+          {spouseName[0]}
+        </div>
+        {editName ? (
+          <div className="flex items-center gap-2">
+            <input className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+              value={nameInput} onChange={e=>setNameInput(e.target.value)} autoFocus/>
+            <Btn sm onClick={()=>{setSpouseName(nameInput);setEditName(false);}}>Сохранить</Btn>
+            <Btn sm variant="secondary" onClick={()=>setEditName(false)}>Отмена</Btn>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-bold text-gray-800">{spouseName}</h2>
+            <button onClick={()=>{setNameInput(spouseName);setEditName(true);}} className="text-gray-400 hover:text-gray-600 text-sm">✏️</button>
+          </div>
+        )}
+        <div className="ml-auto">
+          <Btn onClick={()=>setShowAdd(true)}>+ Командировка</Btn>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-4">
+        <div className="bg-white rounded-xl p-4 shadow-sm text-center">
+          <div className="text-3xl font-bold text-gray-800">{upcoming.length}</div>
+          <div className="text-xs text-gray-500 mt-1">Предстоящих поездок</div>
+        </div>
+        <div className="bg-blue-50 rounded-xl p-4 shadow-sm text-center">
+          <div className="text-3xl font-bold text-blue-700">{upcomingDays}</div>
+          <div className="text-xs text-blue-600 mt-1">Дней в командировках</div>
+        </div>
+        <div className="bg-gray-50 rounded-xl p-4 shadow-sm text-center">
+          <div className="text-3xl font-bold text-gray-600">{done.length}</div>
+          <div className="text-xs text-gray-500 mt-1">Завершено поездок</div>
+        </div>
+      </div>
+
+      {/* Next trip alert */}
+      {nextTrip && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-4">
+          <div className="text-3xl">✈️</div>
+          <div className="flex-1">
+            <div className="font-semibold text-amber-800">Следующая командировка — {nextTrip.city}</div>
+            <div className="text-sm text-amber-700">{nextTrip.purpose} · {formatDate(nextTrip.start)} — {formatDate(nextTrip.end)}</div>
+          </div>
+          <div className="text-right">
+            <div className="text-2xl font-bold text-amber-700">{daysToNext <= 0 ? 'Сегодня' : `${daysToNext}д`}</div>
+            <div className="text-xs text-amber-600">{daysToNext > 0 ? 'до отъезда' : ''}</div>
+          </div>
+        </div>
+      )}
+
+      {/* Upcoming trips */}
+      <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+        <div className="p-4 border-b border-gray-100">
+          <h3 className="font-semibold text-gray-800">🗓 Предстоящие командировки</h3>
+        </div>
+        {upcoming.length === 0 && <p className="p-4 text-sm text-gray-400">Нет запланированных командировок</p>}
+        <div className="divide-y divide-gray-50">
+          {upcoming.map(t => {
+            const days = Math.ceil((isoToDate(t.end)-isoToDate(t.start))/(1000*60*60*24))+1;
+            return (
+              <div key={t.id} className="flex items-center gap-4 px-4 py-3 hover:bg-gray-50">
+                <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center text-lg">🏙️</div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-gray-800">{t.city}</div>
+                  <div className="text-sm text-gray-500">{t.purpose}</div>
+                </div>
+                <div className="text-right text-sm">
+                  <div className="text-gray-700 font-medium">{formatDate(t.start)} — {formatDate(t.end)}</div>
+                  <div className="text-gray-400 text-xs">{days} {days===1?'день':days<5?'дня':'дней'}</div>
+                </div>
+                <div className="flex gap-1">
+                  <Btn sm variant="success" onClick={()=>markDone(t.id)}>✓</Btn>
+                  <Btn sm variant="danger" onClick={()=>removeTrip(t.id)}>×</Btn>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Past trips */}
+      {done.length > 0 && (
+        <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+          <div className="p-4 border-b border-gray-100">
+            <h3 className="font-semibold text-gray-800">✅ Завершённые командировки</h3>
+          </div>
+          <div className="divide-y divide-gray-50">
+            {done.map(t => {
+              const days = Math.ceil((isoToDate(t.end)-isoToDate(t.start))/(1000*60*60*24))+1;
+              return (
+                <div key={t.id} className="flex items-center gap-4 px-4 py-3 opacity-60 hover:opacity-80">
+                  <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center text-lg">🏙️</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-gray-700">{t.city}</div>
+                    <div className="text-sm text-gray-500">{t.purpose}</div>
+                  </div>
+                  <div className="text-right text-sm">
+                    <div className="text-gray-600">{formatDate(t.start)} — {formatDate(t.end)}</div>
+                    <div className="text-gray-400 text-xs">{days} {days===1?'день':days<5?'дня':'дней'}</div>
+                  </div>
+                  <Btn sm variant="danger" onClick={()=>removeTrip(t.id)}>×</Btn>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Add trip modal */}
+      {showAdd && (
+        <Modal title="Добавить командировку" onClose={()=>setShowAdd(false)}>
+          <AddSpouseTripForm onClose={()=>setShowAdd(false)} onSave={addTrip}/>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function AddSpouseTripForm({ onClose, onSave }) {
+  const [form, setForm] = useState({ city:'', purpose:'', start:'', end:'', status:'upcoming' });
+  const set = k => e => setForm(f=>({...f,[k]:e.target.value}));
+  return (
+    <div className="space-y-3">
+      <div><Label>Город / страна</Label><Input value={form.city} onChange={set('city')} placeholder="Астана"/></div>
+      <div><Label>Цель поездки</Label><Input value={form.purpose} onChange={set('purpose')} placeholder="Конференция"/></div>
+      <div className="grid grid-cols-2 gap-3">
+        <div><Label>Дата отъезда</Label><Input type="date" value={form.start} onChange={set('start')}/></div>
+        <div><Label>Дата возврата</Label><Input type="date" value={form.end} onChange={set('end')}/></div>
+      </div>
+      <div><Label>Статус</Label>
+        <Select value={form.status} onChange={set('status')}>
+          <option value="upcoming">Предстоящая</option>
+          <option value="done">Завершённая</option>
+        </Select>
+      </div>
+      <div className="flex gap-2 pt-2">
+        <Btn onClick={()=>{ if(form.city&&form.start&&form.end) onSave(form); }}>Добавить</Btn>
+        <Btn variant="secondary" onClick={onClose}>Отмена</Btn>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // MAIN APP
 // ═══════════════════════════════════════════════════════════════════════════════
 function App() {
@@ -1297,6 +1539,7 @@ function App() {
     { id:'vacations',   label:'Каникулы & Отпуск', icon:'🏖️' },
     { id:'grades',      label:'Успеваемость',      icon:'📊' },
     { id:'budget',      label:'Бюджет',            icon:'💰' },
+    { id:'spouse',      label:'Супруг',            icon:'✈️' },
     { id:'notifications',label:'Уведомления',      icon:'🔔', badge: unreadCount },
   ];
 
@@ -1369,6 +1612,9 @@ function App() {
         )}
         {activeTab==='budget' && (
           <BudgetTab children={children} toast={toast}/>
+        )}
+        {activeTab==='spouse' && (
+          <SpouseTab toast={toast}/>
         )}
         {activeTab==='notifications' && (
           <NotificationsTab children={children} notifications={notifications} setNotifications={setNotifications} toast={toast}/>
