@@ -47,9 +47,16 @@ function getSession() {
 function saveSession(user) { localStorage.setItem(SESSION_KEY, JSON.stringify(user)); }
 function clearSession() { localStorage.removeItem(SESSION_KEY); }
 
+const ALLOWED_EMAILS = [
+  'dinka.musina@gmail.com',
+];
+
 async function registerUser(name, email, password) {
+  const normalEmail = email.toLowerCase().trim();
+  if (!ALLOWED_EMAILS.includes(normalEmail))
+    return { error: 'Этот email не имеет доступа к приложению. Обратитесь к администратору.' };
   const users = getUsers();
-  if (users.find(u => u.email.toLowerCase() === email.toLowerCase()))
+  if (users.find(u => u.email === normalEmail))
     return { error: 'Пользователь с таким email уже зарегистрирован' };
   const hash = await hashPassword(password);
   const user = { id: 'u-' + Date.now(), name, email: email.toLowerCase(), hash };
@@ -60,9 +67,12 @@ async function registerUser(name, email, password) {
 }
 
 async function loginUser(email, password) {
+  const normalEmail = email.toLowerCase().trim();
+  if (!ALLOWED_EMAILS.includes(normalEmail))
+    return { error: 'Этот email не имеет доступа к приложению.' };
   const users = getUsers();
-  const user = users.find(u => u.email === email.toLowerCase());
-  if (!user) return { error: 'Пользователь не найден' };
+  const user = users.find(u => u.email === normalEmail);
+  if (!user) return { error: 'Пользователь не найден. Сначала зарегистрируйтесь.' };
   const hash = await hashPassword(password);
   if (hash !== user.hash) return { error: 'Неверный пароль' };
   const session = { id: user.id, name: user.name, email: user.email };
