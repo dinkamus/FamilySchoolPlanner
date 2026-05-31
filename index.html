@@ -47,9 +47,17 @@ function getSession() {
 function saveSession(user) { localStorage.setItem(SESSION_KEY, JSON.stringify(user)); }
 function clearSession() { localStorage.removeItem(SESSION_KEY); }
 
-const ALLOWED_EMAILS = [
-  'dinka.musina@gmail.com',
-];
+// ─── ROLES CONFIG ────────────────────────────────────────────────────────────
+// role: 'parent' = полный доступ | 'child' = только свои данные
+const USER_ROLES = {
+  'dinka.musina@gmail.com':       { role:'parent', label:'Мама',  childId: null },
+  'baga.musin@gmail.com':         { role:'parent', label:'Папа',  childId: null },
+  'batyrbekaruzhan00@gmail.com':  { role:'child',  label:'Ару',   childId: 'c1' },
+  'batyrbekbirganym@gmail.com':   { role:'child',  label:'Мика',  childId: 'c2' },
+  'batyrbekaldiyar2@gmail.com':   { role:'child',  label:'Бони',  childId: 'c3' },
+};
+
+const ALLOWED_EMAILS = Object.keys(USER_ROLES);
 
 async function registerUser(name, email, password) {
   const normalEmail = email.toLowerCase().trim();
@@ -59,9 +67,11 @@ async function registerUser(name, email, password) {
   if (users.find(u => u.email === normalEmail))
     return { error: 'Пользователь с таким email уже зарегистрирован' };
   const hash = await hashPassword(password);
-  const user = { id: 'u-' + Date.now(), name, email: email.toLowerCase(), hash };
+  const roleInfo = USER_ROLES[normalEmail];
+  const displayName = roleInfo.label;
+  const user = { id: 'u-' + Date.now(), name: displayName, email: normalEmail, hash };
   saveUsers([...users, user]);
-  const session = { id: user.id, name: user.name, email: user.email };
+  const session = { id: user.id, name: displayName, email: normalEmail, role: roleInfo.role, childId: roleInfo.childId };
   saveSession(session);
   return { user: session };
 }
@@ -75,7 +85,8 @@ async function loginUser(email, password) {
   if (!user) return { error: 'Пользователь не найден. Сначала зарегистрируйтесь.' };
   const hash = await hashPassword(password);
   if (hash !== user.hash) return { error: 'Неверный пароль' };
-  const session = { id: user.id, name: user.name, email: user.email };
+  const roleInfo = USER_ROLES[normalEmail];
+  const session = { id: user.id, name: roleInfo.label, email: normalEmail, role: roleInfo.role, childId: roleInfo.childId };
   saveSession(session);
   return { user: session };
 }
@@ -1214,30 +1225,33 @@ function AddGradeModal({ children, selectedChild, onClose, onSave }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // TAB: BUDGET
 // ═══════════════════════════════════════════════════════════════════════════════
-function BudgetTab({ children, toast }) {
+function BudgetTab({ children, toast, isParent, myChildId }) {
   const [expenses, setExpenses] = useState(INITIAL_EXPENSES);
   const [showAdd, setShowAdd] = useState(false);
 
+  // Children see only their own expenses
+  const visibleExpenses = isParent ? expenses : expenses.filter(e=>e.childId===myChildId);
+
   const thisMonth = new Date().toISOString().slice(0,7);
-  const monthExpenses = expenses.filter(e=>e.date.startsWith(thisMonth));
+  const monthExpenses = visibleExpenses.filter(e=>e.date.startsWith(thisMonth));
 
   const totalPaid = monthExpenses.filter(e=>e.status==='paid').reduce((s,e)=>s+e.amount,0);
   const totalPending = monthExpenses.filter(e=>e.status==='pending').reduce((s,e)=>s+e.amount,0);
   const totalOverdue = monthExpenses.filter(e=>e.status==='overdue').reduce((s,e)=>s+e.amount,0);
   const total = totalPaid+totalPending+totalOverdue;
 
-  // By child
-  const byChild = children.map(ch => ({
+  // By child (parents only)
+  const byChild = isParent ? children.map(ch => ({
     child: ch,
     amount: monthExpenses.filter(e=>e.childId===ch.id).reduce((s,e)=>s+e.amount,0),
-  }));
+  })) : [];
 
   // By category
   const byCat = {};
   monthExpenses.forEach(e => { byCat[e.category] = (byCat[e.category]||0)+e.amount; });
 
   // Upcoming (pending/overdue)
-  const upcoming = [...expenses].filter(e=>e.status!=='paid').sort((a,b)=>a.date.localeCompare(b.date));
+  const upcoming = [...visibleExpenses].filter(e=>e.status!=='paid').sort((a,b)=>a.date.localeCompare(b.date));
 
   function fmt(n) { return n.toLocaleString('ru-RU')+'₸'; }
 
@@ -1342,14 +1356,14 @@ function BudgetTab({ children, toast }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {[...expenses].sort((a,b)=>b.date.localeCompare(a.date)).map(e=>{
+              {[...visibleExpenses].sort((a,b)=>b.date.localeCompare(a.date)).map(e=>{
                 const ch=children.find(c=>c.id===e.childId);
                 return (
                   <tr key={e.id} className="hover:bg-gray-50">
                     <td className="px-4 py-2 text-xs text-gray-500">{formatDate(e.date)}</td>
-                    <td className="px-4 py-2">
+                    {isParent && <td className="px-4 py-2">
                       {ch&&<span className={`text-xs font-medium px-2 py-0.5 rounded-full ${COLORS[ch.color].light} ${COLORS[ch.color].text}`}>{ch.name}</span>}
-                    </td>
+                    </td>}
                     <td className="px-4 py-2 text-sm text-gray-700">{e.category}</td>
                     <td className="px-4 py-2 text-sm font-semibold text-gray-800">{fmt(e.amount)}</td>
                     <td className="px-4 py-2"><StatusBadge status={e.status}/></td>
@@ -1361,22 +1375,22 @@ function BudgetTab({ children, toast }) {
         </div>
       </div>
 
-      {showAdd && <AddExpenseModal children={children} onClose={()=>setShowAdd(false)} onSave={addExpense}/>}
+      {showAdd && <AddExpenseModal children={children} onClose={()=>setShowAdd(false)} onSave={addExpense} fixedChildId={isParent?null:myChildId}/>}
     </div>
   );
 }
 
-function AddExpenseModal({ children, onClose, onSave }) {
-  const [form, setForm] = useState({ childId:children[0]?.id||'', category:'Школьный сбор', amount:'', date:new Date().toISOString().slice(0,10), status:'paid' });
+function AddExpenseModal({ children, onClose, onSave, fixedChildId }) {
+  const [form, setForm] = useState({ childId:fixedChildId||children[0]?.id||'', category:'Школьный сбор', amount:'', date:new Date().toISOString().slice(0,10), status:'paid' });
   const set = k => e => setForm(f=>({...f,[k]:e.target.value}));
   return (
     <Modal title="Добавить расход" onClose={onClose}>
       <div className="space-y-3">
-        <div><Label>Ребёнок</Label>
+        {!fixedChildId && <div><Label>Ребёнок</Label>
           <Select value={form.childId} onChange={set('childId')}>
             {children.map(ch=><option key={ch.id} value={ch.id}>{ch.name}</option>)}
           </Select>
-        </div>
+        </div>}
         <div><Label>Категория</Label>
           <Select value={form.category} onChange={set('category')}>
             {EXPENSE_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}
@@ -1530,6 +1544,286 @@ function AddChildModal({ onClose, onSave }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// TAB: FLIGHTS (перелёты детей)
+// ═══════════════════════════════════════════════════════════════════════════════
+const INITIAL_FLIGHTS = {
+  c1:[{id:'f1',from:'Алматы',to:'Астана',date:'2026-06-15',airline:'Air Astana',flightNo:'KC123',status:'upcoming'}],
+  c2:[{id:'f2',from:'Алматы',to:'Дубай',date:'2026-07-01',airline:'FlyDubai',flightNo:'FZ567',status:'upcoming'}],
+  c3:[], c4:[], c5:[],
+};
+
+function FlightsTab({ children, updateChild, toast, isParent, myChildId }) {
+  const [flights, setFlights] = useState(INITIAL_FLIGHTS);
+  const [showAdd, setShowAdd] = useState(null); // childId
+  const [selectedChildId, setSelectedChildId] = useState(isParent ? children[0]?.id : myChildId);
+
+  const visibleChildren = isParent ? children : children.filter(c=>c.id===myChildId);
+
+  function addFlight(childId, data) {
+    setFlights(prev=>({ ...prev, [childId]:[...(prev[childId]||[]), {id:uid(),...data}] }));
+    setShowAdd(null);
+    toast('Перелёт добавлен ✓');
+  }
+  function removeFlight(childId, id) {
+    setFlights(prev=>({ ...prev, [childId]:(prev[childId]||[]).filter(f=>f.id!==id) }));
+    toast('Перелёт удалён');
+  }
+  function markFlightDone(childId, id) {
+    setFlights(prev=>({ ...prev, [childId]:(prev[childId]||[]).map(f=>f.id===id?{...f,status:'done'}:f) }));
+  }
+
+  const currentChild = children.find(c=>c.id===selectedChildId);
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-bold text-gray-800">✈️ Перелёты</h2>
+      </div>
+
+      {/* Child selector */}
+      {isParent && (
+        <div className="flex gap-2 flex-wrap">
+          {children.map(ch=>(
+            <button key={ch.id} onClick={()=>setSelectedChildId(ch.id)}
+              className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-sm font-medium transition-all ${selectedChildId===ch.id?`${COLORS[ch.color].bg} text-white border-transparent`:'bg-white border-gray-200 text-gray-600 hover:border-gray-300'}`}>
+              <span>{ch.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {currentChild && (
+        <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between p-4 border-b border-gray-100">
+            <div className="flex items-center gap-3">
+              <Avatar child={currentChild} size="sm"/>
+              <span className="font-semibold text-gray-800">{currentChild.name} — перелёты</span>
+            </div>
+            <Btn sm onClick={()=>setShowAdd(currentChild.id)}>+ Добавить</Btn>
+          </div>
+
+          {(flights[currentChild.id]||[]).length===0 && (
+            <p className="p-6 text-center text-gray-400 text-sm">Нет запланированных перелётов</p>
+          )}
+
+          <div className="divide-y divide-gray-50">
+            {[...(flights[currentChild.id]||[])].sort((a,b)=>a.date.localeCompare(b.date)).map(f=>(
+              <div key={f.id} className={`flex items-center gap-4 px-4 py-3 hover:bg-gray-50 ${f.status==='done'?'opacity-50':''}`}>
+                <div className="text-2xl">🛫</div>
+                <div className="flex-1">
+                  <div className="font-semibold text-gray-800">{f.from} → {f.to}</div>
+                  <div className="text-xs text-gray-500">{f.airline} · {f.flightNo}</div>
+                </div>
+                <div className="text-sm text-gray-600 font-medium">{formatDate(f.date)}</div>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${f.status==='upcoming'?'bg-blue-100 text-blue-700':'bg-gray-100 text-gray-500'}`}>
+                  {f.status==='upcoming'?'Предстоящий':'Выполнен'}
+                </span>
+                {f.status==='upcoming' && <Btn sm variant="success" onClick={()=>markFlightDone(currentChild.id,f.id)}>✓</Btn>}
+                <Btn sm variant="danger" onClick={()=>removeFlight(currentChild.id,f.id)}>×</Btn>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {showAdd && (
+        <Modal title="Добавить перелёт" onClose={()=>setShowAdd(null)}>
+          <AddFlightForm onClose={()=>setShowAdd(null)} onSave={data=>addFlight(showAdd,data)}/>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function AddFlightForm({ onClose, onSave }) {
+  const [form, setForm] = useState({from:'',to:'',date:'',airline:'',flightNo:'',status:'upcoming'});
+  const set = k => e => setForm(f=>({...f,[k]:e.target.value}));
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <div><Label>Откуда</Label><Input value={form.from} onChange={set('from')} placeholder="Алматы"/></div>
+        <div><Label>Куда</Label><Input value={form.to} onChange={set('to')} placeholder="Астана"/></div>
+      </div>
+      <div><Label>Дата вылета</Label><Input type="date" value={form.date} onChange={set('date')}/></div>
+      <div className="grid grid-cols-2 gap-3">
+        <div><Label>Авиакомпания</Label><Input value={form.airline} onChange={set('airline')} placeholder="Air Astana"/></div>
+        <div><Label>Номер рейса</Label><Input value={form.flightNo} onChange={set('flightNo')} placeholder="KC123"/></div>
+      </div>
+      <div className="flex gap-2 pt-2">
+        <Btn onClick={()=>{if(form.from&&form.to&&form.date) onSave(form);}}>Добавить</Btn>
+        <Btn variant="secondary" onClick={onClose}>Отмена</Btn>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TAB: EXAMS (экзамены детей)
+// ═══════════════════════════════════════════════════════════════════════════════
+const EXAM_TYPES = ['ЕНТ','Олимпиада','Контрольная','Зачёт','Собеседование','Другое'];
+
+function ExamsTab({ children, updateChild, toast, isParent, myChildId }) {
+  const [exams, setExams] = useState({
+    c1:[
+      {id:'ex1',subject:'Математика',type:'ЕНТ',date:'2026-06-10',time:'09:00',location:'Школа №1',note:'Взять паспорт',status:'upcoming'},
+      {id:'ex2',subject:'Физика',type:'Олимпиада',date:'2026-06-20',time:'10:00',location:'ГорОО',note:'',status:'upcoming'},
+    ],
+    c2:[{id:'ex3',subject:'Алгебра',type:'Контрольная',date:'2026-06-05',time:'08:30',location:'Школа №3',note:'',status:'upcoming'}],
+    c3:[], c4:[], c5:[],
+  });
+  const [showAdd, setShowAdd] = useState(null);
+  const [selectedChildId, setSelectedChildId] = useState(isParent ? children[0]?.id : myChildId);
+
+  function addExam(childId, data) {
+    setExams(prev=>({...prev,[childId]:[...(prev[childId]||[]),{id:uid(),...data}]}));
+    setShowAdd(null);
+    toast('Экзамен добавлен ✓');
+  }
+  function removeExam(childId, id) {
+    setExams(prev=>({...prev,[childId]:(prev[childId]||[]).filter(e=>e.id!==id)}));
+    toast('Экзамен удалён');
+  }
+  function markExamDone(childId, id) {
+    setExams(prev=>({...prev,[childId]:(prev[childId]||[]).map(e=>e.id===id?{...e,status:'done'}:e)}));
+  }
+
+  // upcoming across all visible children (for parent overview)
+  const allUpcoming = [];
+  (isParent ? children : children.filter(c=>c.id===myChildId)).forEach(ch=>{
+    (exams[ch.id]||[]).filter(e=>e.status==='upcoming').forEach(e=>allUpcoming.push({...e,child:ch}));
+  });
+  allUpcoming.sort((a,b)=>a.date.localeCompare(b.date));
+
+  const currentChild = children.find(c=>c.id===selectedChildId);
+
+  const daysUntil = (dateStr) => {
+    const diff = Math.ceil((isoToDate(dateStr)-new Date())/(1000*60*60*24));
+    if (diff===0) return 'Сегодня!';
+    if (diff<0) return 'Прошёл';
+    return `${diff} дн.`;
+  };
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-bold text-gray-800">📝 Экзамены</h2>
+      </div>
+
+      {/* Nearest exams (all children) */}
+      {allUpcoming.length>0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+          <div className="font-semibold text-amber-800 mb-3">⏰ Ближайшие экзамены</div>
+          <div className="space-y-2">
+            {allUpcoming.slice(0,5).map(e=>(
+              <div key={e.id} className="flex items-center gap-3 bg-white rounded-lg px-3 py-2 shadow-sm">
+                {isParent && <Avatar child={e.child} size="sm"/>}
+                <div className="flex-1">
+                  <span className="font-medium text-gray-800 text-sm">{e.subject}</span>
+                  <span className="ml-2 text-xs text-gray-500">{e.type}</span>
+                </div>
+                <span className="text-xs text-gray-500">{formatDate(e.date)} {e.time}</span>
+                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${daysUntil(e.date)==='Сегодня!'?'bg-red-100 text-red-700':'bg-amber-100 text-amber-700'}`}>
+                  {daysUntil(e.date)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Child selector */}
+      {isParent && (
+        <div className="flex gap-2 flex-wrap">
+          {children.map(ch=>(
+            <button key={ch.id} onClick={()=>setSelectedChildId(ch.id)}
+              className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-sm font-medium transition-all ${selectedChildId===ch.id?`${COLORS[ch.color].bg} text-white border-transparent`:'bg-white border-gray-200 text-gray-600 hover:border-gray-300'}`}>
+              {ch.name}
+              {(exams[ch.id]||[]).filter(e=>e.status==='upcoming').length>0 &&
+                <span className="bg-white/30 text-xs px-1.5 rounded-full">{(exams[ch.id]||[]).filter(e=>e.status==='upcoming').length}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Exam list for selected child */}
+      {currentChild && (
+        <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between p-4 border-b border-gray-100">
+            <div className="flex items-center gap-3">
+              <Avatar child={currentChild} size="sm"/>
+              <span className="font-semibold text-gray-800">{currentChild.name}</span>
+            </div>
+            <Btn sm onClick={()=>setShowAdd(currentChild.id)}>+ Экзамен</Btn>
+          </div>
+
+          {(exams[currentChild.id]||[]).length===0 && (
+            <p className="p-6 text-center text-gray-400 text-sm">Экзаменов нет</p>
+          )}
+
+          <div className="divide-y divide-gray-50">
+            {[...(exams[currentChild.id]||[])].sort((a,b)=>a.date.localeCompare(b.date)).map(ex=>(
+              <div key={ex.id} className={`px-4 py-3 hover:bg-gray-50 ${ex.status==='done'?'opacity-50':''}`}>
+                <div className="flex items-start gap-3">
+                  <div className="text-2xl">📋</div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold text-gray-800">{ex.subject}</span>
+                      <span className="text-xs bg-violet-100 text-violet-700 px-2 py-0.5 rounded-full">{ex.type}</span>
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${ex.status==='done'?'bg-gray-100 text-gray-500':daysUntil(ex.date)==='Сегодня!'?'bg-red-100 text-red-700':'bg-blue-100 text-blue-700'}`}>
+                        {ex.status==='done'?'Сдан':daysUntil(ex.date)}
+                      </span>
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      📅 {formatDate(ex.date)} в {ex.time} · 📍 {ex.location}
+                    </div>
+                    {ex.note && <div className="text-xs text-amber-700 mt-1">💡 {ex.note}</div>}
+                  </div>
+                  <div className="flex gap-1">
+                    {ex.status==='upcoming' && <Btn sm variant="success" onClick={()=>markExamDone(currentChild.id,ex.id)}>✓</Btn>}
+                    <Btn sm variant="danger" onClick={()=>removeExam(currentChild.id,ex.id)}>×</Btn>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {showAdd && (
+        <Modal title="Добавить экзамен" onClose={()=>setShowAdd(null)}>
+          <AddExamForm onClose={()=>setShowAdd(null)} onSave={data=>addExam(showAdd,data)}/>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function AddExamForm({ onClose, onSave }) {
+  const [form, setForm] = useState({subject:'',type:'Контрольная',date:'',time:'09:00',location:'',note:'',status:'upcoming'});
+  const set = k => e => setForm(f=>({...f,[k]:e.target.value}));
+  return (
+    <div className="space-y-3">
+      <div><Label>Предмет</Label><Input value={form.subject} onChange={set('subject')} placeholder="Математика"/></div>
+      <div><Label>Тип</Label>
+        <Select value={form.type} onChange={set('type')}>
+          {EXAM_TYPES.map(t=><option key={t} value={t}>{t}</option>)}
+        </Select>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div><Label>Дата</Label><Input type="date" value={form.date} onChange={set('date')}/></div>
+        <div><Label>Время</Label><Input type="time" value={form.time} onChange={set('time')}/></div>
+      </div>
+      <div><Label>Место проведения</Label><Input value={form.location} onChange={set('location')} placeholder="Школа №1"/></div>
+      <div><Label>Заметка (необязательно)</Label><Input value={form.note} onChange={set('note')} placeholder="Взять паспорт, ручку..."/></div>
+      <div className="flex gap-2 pt-2">
+        <Btn onClick={()=>{if(form.subject&&form.date) onSave(form);}}>Добавить</Btn>
+        <Btn variant="secondary" onClick={onClose}>Отмена</Btn>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // TAB: DINA SCHEDULE
 // ═══════════════════════════════════════════════════════════════════════════════
 const ALL_DAYS = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
@@ -1572,8 +1866,8 @@ function DinaTab({ toast }) {
       <div className="flex items-center gap-4">
         <div className="w-12 h-12 rounded-full bg-gradient-to-br from-rose-400 to-pink-600 text-white flex items-center justify-center text-xl font-bold shadow-md">Д</div>
         <div>
-          <h2 className="text-xl font-bold text-gray-800">Дина</h2>
-          <p className="text-sm text-gray-500">Моё расписание на неделю</p>
+          <h2 className="text-xl font-bold text-gray-800">Мама — расписание</h2>
+          <p className="text-sm text-gray-500">Личное расписание на неделю</p>
         </div>
         <div className="ml-auto flex gap-2">
           <Btn variant={viewMode==='week'?'primary':'secondary'} sm onClick={()=>setViewMode('week')}>Неделя</Btn>
@@ -1749,9 +2043,9 @@ function AddDinaEventForm({ onClose, onSave }) {
 function SpouseTab({ toast }) {
   const [trips, setTrips] = useState(INITIAL_SPOUSE_TRIPS);
   const [showAdd, setShowAdd] = useState(false);
-  const [spouseName, setSpouseName] = useState('Супруг');
+  const [spouseName, setSpouseName] = useState('Папа');
   const [editName, setEditName] = useState(false);
-  const [nameInput, setNameInput] = useState('Супруг');
+  const [nameInput, setNameInput] = useState('Папа');
 
   const upcoming = trips.filter(t=>t.status==='upcoming').sort((a,b)=>a.start.localeCompare(b.start));
   const done = trips.filter(t=>t.status==='done').sort((a,b)=>b.start.localeCompare(a.start));
@@ -2000,17 +2294,36 @@ function MainApp({ user, onLogout }) {
     toast('Профиль ребёнка создан ✓');
   }
 
+  const isParent = user.role === 'parent';
+  const myChildId = user.childId; // null for parents
+  const myChild = myChildId ? children.find(c=>c.id===myChildId) : null;
   const unreadCount = notifications.filter(n=>!n.read).length;
 
-  const TABS = [
-    { id:'schedule',    label:'Расписание',       icon:'📅' },
-    { id:'vacations',   label:'Каникулы & Отпуск', icon:'🏖️' },
-    { id:'grades',      label:'Успеваемость',      icon:'📊' },
-    { id:'budget',      label:'Бюджет',            icon:'💰' },
-    { id:'dina',        label:'Моё расписание',    icon:'👩' },
-    { id:'spouse',      label:'Супруг',            icon:'✈️' },
-    { id:'notifications',label:'Уведомления',      icon:'🔔', badge: unreadCount },
+  // For child: auto-select their profile
+  useEffect(() => {
+    if (myChildId) setSelectedChild(myChildId);
+  }, [myChildId]);
+
+  // Tabs visible per role
+  const ALL_TABS = [
+    { id:'schedule',     label:'Расписание',        icon:'📅' },
+    { id:'flights',      label:'Перелёты',           icon:'✈️' },
+    { id:'vacations',    label:'Каникулы & Отпуск',  icon:'🏖️', parentOnly:true },
+    { id:'grades',       label:'Успеваемость',       icon:'📊' },
+    { id:'exams',        label:'Экзамены',           icon:'📝' },
+    { id:'budget',       label:'Бюджет',             icon:'💰' },
+    { id:'dina',         label:'Мама',               icon:'👩', parentOnly:true },
+    { id:'spouse',       label:'Папа',               icon:'👨', parentOnly:true },
+    { id:'notifications',label:'Уведомления',        icon:'🔔', badge:unreadCount, parentOnly:true },
   ];
+  const TABS = ALL_TABS.filter(t => isParent || !t.parentOnly);
+
+  // Avatar colors for parent users
+  const userAvatarColor = user.name==='Мама'
+    ? 'from-rose-400 to-pink-600'
+    : user.name==='Папа'
+    ? 'from-blue-500 to-indigo-700'
+    : 'from-amber-400 to-orange-500';
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -2023,47 +2336,40 @@ function MainApp({ user, onLogout }) {
               <span className="font-bold text-gray-800 text-sm hidden sm:block">Семейный планировщик</span>
             </div>
 
-            {/* Child avatars */}
-            <div className="flex items-center gap-2 ml-2">
-              {children.map(ch=>(
-                <Avatar key={ch.id} child={ch} active={ch.id===selectedChild}
-                  onClick={()=>setSelectedChild(ch.id)}/>
-              ))}
-              <button onClick={()=>setShowAddChild(true)}
-                className="w-10 h-10 rounded-full border-2 border-dashed border-gray-300 text-gray-400 hover:border-blue-400 hover:text-blue-500 text-xl flex items-center justify-center transition-colors">
-                +
-              </button>
-            </div>
-
-            {/* Selected child info */}
-            <div className="hidden md:block ml-2">
-              {(() => {
-                const ch = children.find(c=>c.id===selectedChild);
-                if (!ch) return null;
-                const c = COLORS[ch.color];
-                return (
-                  <div className={`text-xs px-3 py-1 rounded-full ${c.light} ${c.text} font-medium`}>
-                    {ch.name} · {ch.class} · {ch.school}
-                  </div>
-                );
-              })()}
-            </div>
+            {/* Child avatars — only parents see all, child sees only self */}
+            {isParent ? (
+              <div className="flex items-center gap-2 ml-2">
+                {children.map(ch=>(
+                  <Avatar key={ch.id} child={ch} active={ch.id===selectedChild} onClick={()=>setSelectedChild(ch.id)}/>
+                ))}
+                <button onClick={()=>setShowAddChild(true)}
+                  className="w-10 h-10 rounded-full border-2 border-dashed border-gray-300 text-gray-400 hover:border-blue-400 hover:text-blue-500 text-xl flex items-center justify-center transition-colors">+</button>
+              </div>
+            ) : myChild ? (
+              <div className="flex items-center gap-2 ml-2">
+                <Avatar child={myChild} active size="md"/>
+                <span className="text-sm font-medium text-gray-700 hidden sm:block">{myChild.name} · {myChild.class}</span>
+              </div>
+            ) : null}
 
             {/* User menu */}
             <div className="ml-auto relative">
               <button onClick={()=>setShowUserMenu(s=>!s)}
                 className="flex items-center gap-2 bg-gray-100 hover:bg-gray-200 rounded-xl px-3 py-2 transition-colors">
-                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-rose-400 to-pink-600 text-white text-xs font-bold flex items-center justify-center">
+                <div className={`w-7 h-7 rounded-full bg-gradient-to-br ${userAvatarColor} text-white text-xs font-bold flex items-center justify-center`}>
                   {user.name?.[0]?.toUpperCase() || '?'}
                 </div>
                 <span className="text-sm font-medium text-gray-700 hidden sm:block">{user.name}</span>
                 <span className="text-gray-400 text-xs">▾</span>
               </button>
               {showUserMenu && (
-                <div className="absolute right-0 top-full mt-2 bg-white rounded-xl shadow-xl border border-gray-100 py-2 w-48 z-50">
+                <div className="absolute right-0 top-full mt-2 bg-white rounded-xl shadow-xl border border-gray-100 py-2 w-52 z-50">
                   <div className="px-4 py-2 border-b border-gray-100">
                     <div className="text-sm font-semibold text-gray-800">{user.name}</div>
                     <div className="text-xs text-gray-500 truncate">{user.email}</div>
+                    <div className={`text-xs mt-1 font-medium ${isParent?'text-blue-600':'text-amber-600'}`}>
+                      {isParent ? '👑 Родитель — полный доступ' : '👤 Ребёнок — личные данные'}
+                    </div>
                   </div>
                   <button onClick={()=>{ setShowUserMenu(false); onLogout(); }}
                     className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2">
@@ -2095,32 +2401,35 @@ function MainApp({ user, onLogout }) {
       {/* Main content */}
       <main className="max-w-6xl mx-auto px-4 py-6">
         {activeTab==='schedule' && (
-          <ScheduleTab children={children} selectedChild={selectedChild} setSelectedChild={setSelectedChild} updateChild={updateChild} toast={toast}/>
+          <ScheduleTab children={children} selectedChild={isParent?selectedChild:myChildId} setSelectedChild={setSelectedChild} updateChild={updateChild} toast={toast} isParent={isParent} myChildId={myChildId}/>
         )}
-        {activeTab==='vacations' && (
+        {activeTab==='flights' && (
+          <FlightsTab children={children} updateChild={updateChild} toast={toast} isParent={isParent} myChildId={myChildId}/>
+        )}
+        {activeTab==='vacations' && isParent && (
           <VacationsTab children={children} updateChild={updateChild} toast={toast}/>
         )}
         {activeTab==='grades' && (
-          <GradesTab children={children} selectedChild={selectedChild} setSelectedChild={setSelectedChild} updateChild={updateChild} toast={toast}/>
+          <GradesTab children={children} selectedChild={isParent?selectedChild:myChildId} setSelectedChild={setSelectedChild} updateChild={updateChild} toast={toast} isParent={isParent} myChildId={myChildId}/>
+        )}
+        {activeTab==='exams' && (
+          <ExamsTab children={children} updateChild={updateChild} toast={toast} isParent={isParent} myChildId={myChildId}/>
         )}
         {activeTab==='budget' && (
-          <BudgetTab children={children} toast={toast}/>
+          <BudgetTab children={children} toast={toast} isParent={isParent} myChildId={myChildId}/>
         )}
-        {activeTab==='dina' && (
+        {activeTab==='dina' && isParent && (
           <DinaTab toast={toast}/>
         )}
-        {activeTab==='spouse' && (
+        {activeTab==='spouse' && isParent && (
           <SpouseTab toast={toast}/>
         )}
-        {activeTab==='notifications' && (
+        {activeTab==='notifications' && isParent && (
           <NotificationsTab children={children} notifications={notifications} setNotifications={setNotifications} toast={toast}/>
         )}
       </main>
 
-      {/* Add child modal */}
-      {showAddChild && <AddChildModal onClose={()=>setShowAddChild(false)} onSave={addChild}/>}
-
-      {/* Toast */}
+      {isParent && showAddChild && <AddChildModal onClose={()=>setShowAddChild(false)} onSave={addChild}/>}
       {toastMsg && <Toast msg={toastMsg} onDone={()=>setToastMsg(null)}/>}
     </div>
   );
