@@ -8,6 +8,7 @@
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://accounts.google.com/gsi/client" async></script>
   <style>
     * { box-sizing: border-box; }
     body { margin: 0; font-family: 'Segoe UI', system-ui, sans-serif; background: #f8fafc; }
@@ -24,6 +25,93 @@
 <div id="root"></div>
 <script type="text/babel">
 const { useState, useEffect, useCallback, useRef } = React;
+
+// ─── GOOGLE CLIENT ID ────────────────────────────────────────────────────────
+// Получить: console.cloud.google.com → APIs & Services → Credentials → OAuth 2.0 Client ID
+// Authorized JS origins: https://dinkamus.github.io
+// Authorized redirect URIs: https://dinkamus.github.io/FamilySchoolPlanner/
+const GOOGLE_CLIENT_ID = 'ВСТАВЬТЕ_CLIENT_ID_ЗДЕСЬ';
+const GOOGLE_CONFIGURED = !GOOGLE_CLIENT_ID.includes('ВСТАВЬТЕ');
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// WEBAUTHN — Face ID / Touch ID / Windows Hello
+// ═══════════════════════════════════════════════════════════════════════════════
+const PASSKEY_STORE = 'fsp_passkeys'; // { email: credentialId(base64) }
+
+function getPasskeys() { try { return JSON.parse(localStorage.getItem(PASSKEY_STORE)||'{}'); } catch { return {}; } }
+function savePasskeys(p) { localStorage.setItem(PASSKEY_STORE, JSON.stringify(p)); }
+
+function passkeySupported() {
+  return !!(window.PublicKeyCredential && navigator.credentials && navigator.credentials.create);
+}
+
+function base64url(buffer) {
+  return btoa(String.fromCharCode(...new Uint8Array(buffer)))
+    .replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
+}
+function fromBase64url(str) {
+  str = str.replace(/-/g,'+').replace(/_/g,'/');
+  return Uint8Array.from(atob(str), c=>c.charCodeAt(0));
+}
+
+async function registerPasskey(userId, displayName) {
+  const challenge = crypto.getRandomValues(new Uint8Array(32));
+  const rp = { name: 'Семейный планировщик', id: location.hostname };
+  const user = {
+    id: new TextEncoder().encode(userId),
+    name: displayName,
+    displayName,
+  };
+  const credential = await navigator.credentials.create({
+    publicKey: {
+      challenge,
+      rp,
+      user,
+      pubKeyCredParams: [
+        { alg: -7, type: 'public-key' },   // ES256
+        { alg: -257, type: 'public-key' },  // RS256
+      ],
+      authenticatorSelection: {
+        authenticatorAttachment: 'platform',
+        userVerification: 'required',
+        residentKey: 'preferred',
+      },
+      timeout: 60000,
+    },
+  });
+  const credId = base64url(credential.rawId);
+  const passkeys = getPasskeys();
+  passkeys[userId] = credId;
+  savePasskeys(passkeys);
+  return credId;
+}
+
+async function authenticateWithPasskey(userId) {
+  const passkeys = getPasskeys();
+  const credId = passkeys[userId];
+  if (!credId) return null;
+  const challenge = crypto.getRandomValues(new Uint8Array(32));
+  const assertion = await navigator.credentials.get({
+    publicKey: {
+      challenge,
+      allowCredentials: [{ id: fromBase64url(credId), type: 'public-key' }],
+      userVerification: 'required',
+      timeout: 60000,
+    },
+  });
+  return assertion ? userId : null;
+}
+
+// Find which userId has a passkey registered
+function getPasskeyUser() {
+  const passkeys = getPasskeys();
+  const users = getUsers();
+  for (const [userId, credId] of Object.entries(passkeys)) {
+    const user = users.find(u=>u.id===userId);
+    if (user) return { userId, email: user.email };
+  }
+  return null;
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // AUTH — Web Crypto + localStorage
@@ -91,38 +179,107 @@ async function loginUser(email, password) {
   return { user: session };
 }
 
+// Google Sign-In: автоматически регистрирует если email в whitelist, иначе ошибка
+async function loginWithGoogle(googleUser) {
+  const normalEmail = googleUser.email.toLowerCase().trim();
+  if (!ALLOWED_EMAILS.includes(normalEmail))
+    return { error: `Аккаунт ${googleUser.email} не имеет доступа. Обратитесь к администратору.` };
+  const roleInfo = USER_ROLES[normalEmail];
+  const users = getUsers();
+  let user = users.find(u => u.email === normalEmail);
+  if (!user) {
+    // Auto-register Google user (no password needed)
+    user = { id: 'u-' + Date.now(), name: roleInfo.label, email: normalEmail, hash: 'google-auth', avatar: googleUser.picture };
+    saveUsers([...users, user]);
+  }
+  const session = { id: user.id, name: roleInfo.label, email: normalEmail, role: roleInfo.role, childId: roleInfo.childId, avatar: googleUser.picture };
+  saveSession(session);
+  return { user: session };
+}
+
 // ─── AUTH SCREEN ──────────────────────────────────────────────────────────────
 function AuthScreen({ onAuth }) {
-  const [mode, setMode] = useState('login'); // login | register
-  const [name, setName] = useState('');
+  const [mode, setMode] = useState('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPass, setShowPass] = useState(false);
+  const [passkeyUser, setPasskeyUser] = useState(null);
+  const [faceLoading, setFaceLoading] = useState(false);
+  const googleBtnRef = useRef(null);
+
+  useEffect(() => {
+    // Check if any user has Face ID registered on this device
+    if (passkeySupported()) {
+      const pu = getPasskeyUser();
+      setPasskeyUser(pu);
+    }
+  }, []);
+
+  // Initialize Google Sign-In button
+  useEffect(() => {
+    if (!GOOGLE_CONFIGURED) return;
+    const tryInit = () => {
+      if (window.google && googleBtnRef.current) {
+        window.google.accounts.id.initialize({
+          client_id: GOOGLE_CLIENT_ID,
+          callback: async (response) => {
+            setLoading(true); setError('');
+            try {
+              const payload = JSON.parse(atob(response.credential.split('.')[1]));
+              const result = await loginWithGoogle({ email: payload.email, picture: payload.picture, name: payload.name });
+              if (result.error) { setError(result.error); setLoading(false); return; }
+              onAuth(result.user);
+            } catch(e) { setError('Ошибка Google авторизации'); setLoading(false); }
+          },
+          auto_select: false,
+        });
+        window.google.accounts.id.renderButton(googleBtnRef.current, {
+          theme: 'outline', size: 'large', width: '100%', text: 'signin_with', locale: 'ru',
+        });
+      } else {
+        setTimeout(tryInit, 500);
+      }
+    };
+    tryInit();
+  }, [mode]);
+
+  async function handleFaceId() {
+    if (!passkeyUser) return;
+    setFaceLoading(true); setError('');
+    try {
+      const userId = await authenticateWithPasskey(passkeyUser.userId);
+      if (!userId) { setError('Face ID не подтверждён'); setFaceLoading(false); return; }
+      const users = getUsers();
+      const user = users.find(u=>u.id===userId);
+      if (!user) { setError('Пользователь не найден'); setFaceLoading(false); return; }
+      const roleInfo = USER_ROLES[user.email];
+      const session = { id: user.id, name: roleInfo.label, email: user.email, role: roleInfo.role, childId: roleInfo.childId };
+      saveSession(session);
+      onAuth(session);
+    } catch(e) {
+      setError('Face ID отменён или не поддерживается');
+    }
+    setFaceLoading(false);
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
     if (!email || !password) { setError('Заполните все поля'); return; }
     if (mode === 'register') {
-      if (!name.trim()) { setError('Введите ваше имя'); return; }
       if (password.length < 6) { setError('Пароль минимум 6 символов'); return; }
       if (password !== confirm) { setError('Пароли не совпадают'); return; }
     }
     setLoading(true);
     const result = mode === 'login'
       ? await loginUser(email, password)
-      : await registerUser(name.trim(), email, password);
+      : await registerUser(email, email, password);
     setLoading(false);
     if (result.error) { setError(result.error); return; }
     onAuth(result.user);
-  }
-
-  function switchMode() {
-    setMode(m => m === 'login' ? 'register' : 'login');
-    setError(''); setName(''); setEmail(''); setPassword(''); setConfirm('');
   }
 
   return (
@@ -130,92 +287,100 @@ function AuthScreen({ onAuth }) {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="text-5xl mb-3">🏠</div>
+          <div className="text-6xl mb-3">🏠</div>
           <h1 className="text-2xl font-bold text-gray-800">Семейный планировщик</h1>
           <p className="text-gray-500 text-sm mt-1">Расписание, каникулы, бюджет всей семьи</p>
         </div>
 
-        {/* Card */}
-        <div className="bg-white rounded-2xl shadow-xl p-8">
-          <h2 className="text-xl font-semibold text-gray-800 mb-6">
-            {mode === 'login' ? 'Войти в аккаунт' : 'Создать аккаунт'}
-          </h2>
+        <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+          {/* Tabs */}
+          <div className="flex border-b border-gray-100">
+            {['login','register'].map(m=>(
+              <button key={m} onClick={()=>{setMode(m);setError('');}}
+                className={`flex-1 py-3.5 text-sm font-semibold transition-colors ${mode===m?'text-blue-600 border-b-2 border-blue-600':'text-gray-400 hover:text-gray-600'}`}>
+                {m==='login' ? 'Войти' : 'Регистрация'}
+              </button>
+            ))}
+          </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {mode === 'register' && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Ваше имя</label>
-                <input
-                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
-                  placeholder="Дина"
-                  value={name} onChange={e=>setName(e.target.value)} autoComplete="name"
-                />
+          <div className="p-7 space-y-4">
+            {/* Face ID — only on login if registered */}
+            {mode==='login' && passkeyUser && passkeySupported() && (
+              <button onClick={handleFaceId} disabled={faceLoading}
+                className="w-full flex items-center justify-center gap-3 bg-gray-900 hover:bg-gray-800 disabled:bg-gray-500 text-white font-semibold py-3.5 rounded-xl transition-all shadow-sm">
+                <span className="text-2xl">{faceLoading ? '⏳' : '🔒'}</span>
+                <span>{faceLoading ? 'Подтвердите...' : 'Войти через Face ID / Touch ID'}</span>
+              </button>
+            )}
+
+            {/* Google Sign-In */}
+            {GOOGLE_CONFIGURED ? (
+              <div ref={googleBtnRef} className="w-full min-h-[44px]"/>
+            ) : (
+              <div className="w-full border-2 border-dashed border-gray-200 rounded-xl py-3 px-4 text-center">
+                <p className="text-xs text-gray-400 font-medium">Google Sign-In</p>
+                <p className="text-xs text-gray-400 mt-0.5">Требует настройки Client ID</p>
               </div>
             )}
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-              <input
-                type="email"
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
-                placeholder="dina@example.com"
-                value={email} onChange={e=>setEmail(e.target.value)} autoComplete="email"
-              />
+            {/* Divider */}
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-px bg-gray-100"/>
+              <span className="text-xs text-gray-400">или через email</span>
+              <div className="flex-1 h-px bg-gray-100"/>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Пароль</label>
-              <div className="relative">
-                <input
-                  type={showPass ? 'text' : 'password'}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 transition pr-12"
-                  placeholder={mode === 'register' ? 'Минимум 6 символов' : '••••••••'}
-                  value={password} onChange={e=>setPassword(e.target.value)} autoComplete={mode==='login'?'current-password':'new-password'}
-                />
-                <button type="button" onClick={()=>setShowPass(s=>!s)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-lg">
-                  {showPass ? '🙈' : '👁'}
-                </button>
-              </div>
-            </div>
-
-            {mode === 'register' && (
+            {/* Email form */}
+            <form onSubmit={handleSubmit} className="space-y-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Повторите пароль</label>
-                <input
-                  type={showPass ? 'text' : 'password'}
+                <label className="block text-xs font-medium text-gray-600 mb-1">Email</label>
+                <input type="email"
                   className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
-                  placeholder="••••••••"
-                  value={confirm} onChange={e=>setConfirm(e.target.value)} autoComplete="new-password"
-                />
+                  placeholder="dina@gmail.com"
+                  value={email} onChange={e=>setEmail(e.target.value)} autoComplete="email"/>
               </div>
-            )}
 
-            {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">
-                ⚠️ {error}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Пароль</label>
+                <div className="relative">
+                  <input type={showPass?'text':'password'}
+                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 transition pr-11"
+                    placeholder={mode==='register'?'Минимум 6 символов':'••••••••'}
+                    value={password} onChange={e=>setPassword(e.target.value)}
+                    autoComplete={mode==='login'?'current-password':'new-password'}/>
+                  <button type="button" onClick={()=>setShowPass(s=>!s)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                    {showPass?'🙈':'👁'}
+                  </button>
+                </div>
               </div>
-            )}
 
-            <button
-              type="submit" disabled={loading}
-              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-semibold py-3 rounded-xl transition-all text-sm shadow-sm mt-2">
-              {loading ? '⏳ Подождите...' : mode === 'login' ? 'Войти' : 'Зарегистрироваться'}
-            </button>
-          </form>
+              {mode==='register' && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Повторите пароль</label>
+                  <input type={showPass?'text':'password'}
+                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
+                    placeholder="••••••••"
+                    value={confirm} onChange={e=>setConfirm(e.target.value)} autoComplete="new-password"/>
+                </div>
+              )}
 
-          <div className="mt-6 text-center">
-            <span className="text-sm text-gray-500">
-              {mode === 'login' ? 'Ещё нет аккаунта? ' : 'Уже есть аккаунт? '}
-            </span>
-            <button onClick={switchMode} className="text-sm text-blue-600 hover:text-blue-800 font-medium">
-              {mode === 'login' ? 'Зарегистрироваться' : 'Войти'}
-            </button>
+              {error && (
+                <div className="bg-red-50 border border-red-100 text-red-700 text-xs rounded-xl px-4 py-3 flex items-start gap-2">
+                  <span>⚠️</span><span>{error}</span>
+                </div>
+              )}
+
+              <button type="submit" disabled={loading}
+                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-semibold py-3 rounded-xl transition-all text-sm shadow-sm">
+                {loading ? '⏳ Подождите...' : mode==='login' ? 'Войти →' : 'Зарегистрироваться →'}
+              </button>
+            </form>
           </div>
         </div>
 
-        <p className="text-center text-xs text-gray-400 mt-6">
-          Данные хранятся только на вашем устройстве
+        <p className="text-center text-xs text-gray-400 mt-5">
+          🔒 Данные хранятся только на вашем устройстве
         </p>
       </div>
     </div>
@@ -2371,6 +2536,24 @@ function MainApp({ user, onLogout }) {
                       {isParent ? '👑 Родитель — полный доступ' : '👤 Ребёнок — личные данные'}
                     </div>
                   </div>
+                  {passkeySupported() && (() => {
+                    const passkeys = getPasskeys();
+                    const hasPasskey = !!passkeys[user.id];
+                    return (
+                      <button onClick={async ()=>{
+                        setShowUserMenu(false);
+                        try {
+                          await registerPasskey(user.id, user.name);
+                          alert('✅ Face ID / Touch ID подключён! При следующем входе используйте биометрию.');
+                        } catch(e) {
+                          alert('Не удалось подключить Face ID: ' + (e.message||e));
+                        }
+                      }}
+                        className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2">
+                        {hasPasskey ? '🔒 Face ID подключён ✓' : '🔓 Подключить Face ID'}
+                      </button>
+                    );
+                  })()}
                   <button onClick={()=>{ setShowUserMenu(false); onLogout(); }}
                     className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2">
                     🚪 Выйти из аккаунта
