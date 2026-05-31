@@ -611,6 +611,23 @@ const uid = () => `id-${++idCounter}-${Math.random().toString(36).slice(2,7)}`;
 
 function avg(arr) { return arr.length ? (arr.reduce((s,v)=>s+v,0)/arr.length) : 0; }
 
+// Умная подпись места учёбы
+function schoolTypeLabel(school, cls) {
+  const s = (school||'').toLowerCase();
+  const c = (cls||'').toLowerCase();
+  if (s.includes('university') || s.includes('uci') || s.includes('ucl') || c==='университет') return 'Университет';
+  if (s.includes('spectrum') || s.includes('садик') || c==='садик') return 'Садик';
+  if (s.includes('college') || s.includes('колледж')) return 'Колледж';
+  return 'Школа';
+}
+function classLabel(school, cls) {
+  const type = schoolTypeLabel(school, cls);
+  if (type==='Университет') return 'Вуз';
+  if (type==='Садик') return 'Садик';
+  if (type==='Колледж') return 'Колледж';
+  return cls || '—';
+}
+
 function getChildSubjectAverages(child) {
   const map = {};
   child.grades.forEach(g => {
@@ -798,7 +815,7 @@ function ScheduleTab({ children, selectedChild, setSelectedChild, updateChild, t
                     <Avatar child={ch} size="md" />
                     <div>
                       <div className="font-semibold text-gray-800">{ch.name}</div>
-                      <div className="text-xs text-gray-500">{ch.class} · {ch.school}</div>
+                      <div className="text-xs text-gray-500">{schoolTypeLabel(ch.school,ch.class)} · {ch.school}{ch.class&&ch.class!=='Университет'&&ch.class!=='Садик'?` · ${ch.class}`:''}</div>
                     </div>
                   </div>
                   <div className="text-xs text-gray-500">Сегодня уроков: <span className="font-semibold text-gray-700">{todayCount}</span></div>
@@ -1802,14 +1819,37 @@ function AddChildModal({ onClose, onSave }) {
 
 // ─── EDIT CHILD MODAL ─────────────────────────────────────────────────────────
 function EditChildModal({ child, onClose, onSave }) {
-  const CLASS_PRESETS = ['1А','1Б','2А','2Б','3А','3Б','4А','4Б','F4','5А','5Б','6А','7А','8А','9А','10А','11А','Университет','Садик','Другое'];
-  const SCHOOL_PRESETS = ['UCI','UCL','Concord','Нурорда','Spectrum','Мектеп №1','Мектеп №2','НИШ','БИЛ','Другое'];
+  const SCHOOL_GROUPS = [
+    { label:'🏫 Школа', items:['Concord','Нурорда','НИШ','БИЛ','Мектеп №1','Мектеп №2'] },
+    { label:'🎓 Университет', items:['UCI','UCL','КазНУ','КБТУ','Назарбаев Университет','МУИТ'] },
+    { label:'🌱 Садик', items:['Spectrum','Балапан','Sunshine','Радуга'] },
+  ];
+  const CLASS_GROUPS = [
+    { label:'Начальные', items:['1А','1Б','2А','2Б','3А','3Б','4А','4Б','F4'] },
+    { label:'Средние',   items:['5А','5Б','6А','6Б','7А','7Б','8А','8Б'] },
+    { label:'Старшие',   items:['9А','9Б','10А','10Б','11А','11Б'] },
+    { label:'Другое',    items:['Университет','Садик','Колледж'] },
+  ];
+
   const [form, setForm] = useState({ name:child.name, surname:child.surname, class:child.class, age:child.age, school:child.school, color:child.color });
   const set = k => e => setForm(f=>({...f,[k]:e.target.value}));
 
+  const sType = schoolTypeLabel(form.school, form.class);
+
   return (
-    <Modal title={`Редактировать — ${child.name}`} onClose={onClose}>
-      <div className="space-y-4">
+    <Modal title={`✏️ ${child.name}`} onClose={onClose} wide>
+      <div className="space-y-5">
+
+        {/* Current summary */}
+        <div className={`rounded-xl p-3 flex items-center gap-3 ${COLORS[form.color].light}`}>
+          <div className={`w-10 h-10 rounded-full ${COLORS[form.color].bg} text-white flex items-center justify-center font-bold text-lg`}>{form.name[0]}</div>
+          <div>
+            <div className={`font-semibold ${COLORS[form.color].text}`}>{form.name} {form.surname}</div>
+            <div className={`text-xs ${COLORS[form.color].text} opacity-80`}>
+              {sType} · {form.school} · {form.class}
+            </div>
+          </div>
+        </div>
 
         {/* Name */}
         <div className="grid grid-cols-2 gap-3">
@@ -1817,45 +1857,58 @@ function EditChildModal({ child, onClose, onSave }) {
           <div><Label>Фамилия</Label><Input value={form.surname} onChange={set('surname')}/></div>
         </div>
 
-        {/* Class with presets */}
+        {/* School — grouped */}
         <div>
-          <Label>Класс / курс</Label>
-          <div className="flex flex-wrap gap-1.5 mb-2">
-            {CLASS_PRESETS.map(p=>(
-              <button key={p} type="button" onClick={()=>setForm(f=>({...f,class:p}))}
-                className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all ${form.class===p?'bg-blue-600 text-white border-blue-600':'bg-gray-50 text-gray-600 border-gray-200 hover:border-blue-400 hover:text-blue-600'}`}>
-                {p}
-              </button>
+          <Label>Учебное заведение</Label>
+          <div className="space-y-2 mb-2">
+            {SCHOOL_GROUPS.map(g=>(
+              <div key={g.label}>
+                <div className="text-xs text-gray-400 font-medium mb-1">{g.label}</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {g.items.map(p=>(
+                    <button key={p} type="button" onClick={()=>setForm(f=>({...f,school:p}))}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all ${form.school===p?'bg-blue-600 text-white border-blue-600':'bg-gray-50 text-gray-600 border-gray-200 hover:border-blue-400 hover:text-blue-600'}`}>
+                      {p}
+                    </button>
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
-          <Input value={form.class} onChange={set('class')} placeholder="Или введите вручную"/>
+          <Input value={form.school} onChange={set('school')} placeholder="Или введите название вручную"/>
         </div>
 
-        {/* School with presets */}
+        {/* Class — grouped, label changes by school type */}
         <div>
-          <Label>Школа / садик / университет</Label>
-          <div className="flex flex-wrap gap-1.5 mb-2">
-            {SCHOOL_PRESETS.map(p=>(
-              <button key={p} type="button" onClick={()=>setForm(f=>({...f,school:p}))}
-                className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all ${form.school===p?'bg-blue-600 text-white border-blue-600':'bg-gray-50 text-gray-600 border-gray-200 hover:border-blue-400 hover:text-blue-600'}`}>
-                {p}
-              </button>
+          <Label>{sType==='Университет'?'Вуз / факультет':sType==='Садик'?'Группа':'Класс'}</Label>
+          <div className="space-y-2 mb-2">
+            {CLASS_GROUPS.map(g=>(
+              <div key={g.label}>
+                <div className="text-xs text-gray-400 font-medium mb-1">{g.label}</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {g.items.map(p=>(
+                    <button key={p} type="button" onClick={()=>setForm(f=>({...f,class:p}))}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all ${form.class===p?'bg-blue-600 text-white border-blue-600':'bg-gray-50 text-gray-600 border-gray-200 hover:border-blue-400 hover:text-blue-600'}`}>
+                      {p}
+                    </button>
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
-          <Input value={form.school} onChange={set('school')} placeholder="Или введите вручную"/>
+          <Input value={form.class} onChange={set('class')} placeholder="Или введите вручную (1А, 2 курс, F4...)"/>
         </div>
 
-        {/* Age */}
-        <div><Label>Возраст</Label><Input type="number" value={form.age} onChange={set('age')} placeholder="8"/></div>
-
-        {/* Color */}
-        <div>
-          <Label>Цвет</Label>
-          <div className="flex gap-2 mt-1">
-            {Object.entries(COLORS).map(([key,c])=>(
-              <button key={key} type="button" onClick={()=>setForm(f=>({...f,color:key}))}
-                className={`w-9 h-9 rounded-full ${c.bg} ring-2 ring-offset-2 transition-all ${form.color===key?'ring-gray-800 scale-110':'ring-transparent hover:scale-105'}`}/>
-            ))}
+        <div className="grid grid-cols-2 gap-3">
+          <div><Label>Возраст</Label><Input type="number" value={form.age} onChange={set('age')} placeholder="8"/></div>
+          <div>
+            <Label>Цвет</Label>
+            <div className="flex gap-2 mt-1.5">
+              {Object.entries(COLORS).map(([key,c])=>(
+                <button key={key} type="button" onClick={()=>setForm(f=>({...f,color:key}))}
+                  className={`w-8 h-8 rounded-full ${c.bg} ring-2 ring-offset-2 transition-all ${form.color===key?'ring-gray-800 scale-110':'ring-transparent hover:scale-105'}`}/>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -2958,23 +3011,34 @@ function MainApp({ user, onLogout }) {
 
             {/* Child avatars — only parents see all, child sees only self */}
             {isParent ? (
-              <div className="flex items-center gap-2 ml-2">
+              <div className="flex items-center gap-1.5 ml-2">
                 {children.map(ch=>(
-                  <div key={ch.id} className="relative group">
-                    <Avatar child={ch} active={ch.id===selectedChild} onClick={()=>setSelectedChild(ch.id)}/>
+                  <div key={ch.id} className="flex flex-col items-center gap-0.5">
+                    <div className="relative">
+                      <Avatar child={ch} active={ch.id===selectedChild} onClick={()=>setSelectedChild(ch.id)}/>
+                    </div>
+                    {/* Edit button — always visible under avatar */}
                     <button
                       onClick={()=>setEditingChild(ch)}
-                      className="absolute -top-1 -right-1 w-4 h-4 bg-gray-600 hover:bg-blue-600 text-white rounded-full text-xs hidden group-hover:flex items-center justify-center transition-colors"
-                      title="Редактировать">✏</button>
+                      className="text-gray-400 hover:text-blue-600 transition-colors text-xs leading-none"
+                      title={`Изменить ${ch.name}`}>
+                      ✏️
+                    </button>
                   </div>
                 ))}
-                <button onClick={()=>setShowAddChild(true)}
-                  className="w-10 h-10 rounded-full border-2 border-dashed border-gray-300 text-gray-400 hover:border-blue-400 hover:text-blue-500 text-xl flex items-center justify-center transition-colors">+</button>
+                <div className="flex flex-col items-center gap-0.5 ml-1">
+                  <button onClick={()=>setShowAddChild(true)}
+                    className="w-10 h-10 rounded-full border-2 border-dashed border-gray-300 text-gray-400 hover:border-blue-400 hover:text-blue-500 text-xl flex items-center justify-center transition-colors">+</button>
+                  <span className="text-xs text-gray-300">добавить</span>
+                </div>
               </div>
             ) : myChild ? (
               <div className="flex items-center gap-2 ml-2">
                 <Avatar child={myChild} active size="md"/>
-                <span className="text-sm font-medium text-gray-700 hidden sm:block">{myChild.name} · {myChild.class} · {myChild.school}</span>
+                <div className="hidden sm:block">
+                  <div className="text-sm font-semibold text-gray-800">{myChild.name}</div>
+                  <div className="text-xs text-gray-500">{classLabel(myChild.school, myChild.class)} · {myChild.school}</div>
+                </div>
               </div>
             ) : null}
 
