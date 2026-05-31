@@ -1,0 +1,1390 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Семейный школьный планировщик</title>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: 'Segoe UI', system-ui, sans-serif; background: #f8fafc; }
+    .toast { animation: slideIn 0.3s ease, fadeOut 0.4s ease 2.6s forwards; }
+    @keyframes slideIn { from { transform: translateY(100px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+    .progress-bar { transition: width 0.6s ease; }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #f1f5f9; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useCallback, useRef } = React;
+
+// ─── CONSTANTS ───────────────────────────────────────────────────────────────
+const COLORS = {
+  green:  { bg:'bg-green-500',  light:'bg-green-100',  text:'text-green-700',  border:'border-green-400',  hex:'#22c55e' },
+  blue:   { bg:'bg-blue-500',   light:'bg-blue-100',   text:'text-blue-700',   border:'border-blue-400',   hex:'#3b82f6' },
+  amber:  { bg:'bg-amber-500',  light:'bg-amber-100',  text:'text-amber-700',  border:'border-amber-400',  hex:'#f59e0b' },
+  purple: { bg:'bg-purple-500', light:'bg-purple-100', text:'text-purple-700', border:'border-purple-400', hex:'#a855f7' },
+  pink:   { bg:'bg-pink-500',   light:'bg-pink-100',   text:'text-pink-700',   border:'border-pink-400',   hex:'#ec4899' },
+};
+
+const LESSON_TYPES = {
+  school: { label:'Школа',         color:'bg-blue-100 text-blue-800 border-blue-300' },
+  extra:  { label:'Доп. занятие',  color:'bg-green-100 text-green-800 border-green-300' },
+  music:  { label:'Музыка',        color:'bg-orange-100 text-orange-800 border-orange-300' },
+  sport:  { label:'Спорт',         color:'bg-pink-100 text-pink-800 border-pink-300' },
+};
+
+const DAYS = ['Пн','Вт','Ср','Чт','Пт'];
+const TIME_SLOTS = ['08:00','09:00','10:00','11:00','14:00','15:00','16:00','17:00'];
+
+const EXPENSE_CATEGORIES = ['Школьный сбор','Репетитор','Кружки / секции','Учебники','Форма / одежда','Питание','Транспорт','Другое'];
+const WORK_TYPES = ['Контрольная','Диктант','Тест','Устный ответ','Домашнее задание'];
+
+const MONTHS_RU = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+const DAYS_SHORT = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'];
+
+// ─── INITIAL DATA ─────────────────────────────────────────────────────────────
+const INITIAL_CHILDREN = [
+  {
+    id:'c1', name:'Айгерим', surname:'Мусина', class:'5A', age:11, school:'Школа №1', color:'blue',
+    accessLevel:'view', accessToken:'tok-aigm-001',
+    lessons:[
+      {id:'l1',row:0,day:0,name:'Математика',type:'school'},
+      {id:'l2',row:1,day:0,name:'Русский яз.',type:'school'},
+      {id:'l3',row:2,day:1,name:'Биология',type:'school'},
+      {id:'l4',row:4,day:2,name:'Рисование',type:'extra'},
+      {id:'l5',row:5,day:3,name:'Фортепиано',type:'music'},
+      {id:'l6',row:6,day:4,name:'Волейбол',type:'sport'},
+    ],
+    grades:[
+      {id:'g1',date:'2026-05-20',subject:'Математика',score:5,workType:'Контрольная'},
+      {id:'g2',date:'2026-05-22',subject:'Русский яз.',score:4,workType:'Диктант'},
+      {id:'g3',date:'2026-05-25',subject:'Биология',score:5,workType:'Тест'},
+      {id:'g4',date:'2026-05-28',subject:'Математика',score:4,workType:'Домашнее задание'},
+    ],
+    vacations:[
+      {id:'v1',name:'Летние каникулы',start:'2026-06-01',end:'2026-08-31'},
+      {id:'v2',name:'Осенние каникулы',start:'2026-10-26',end:'2026-11-01'},
+    ],
+  },
+  {
+    id:'c2', name:'Данияр', surname:'Мусин', class:'8Б', age:14, school:'Школа №3', color:'green',
+    accessLevel:'suggest', accessToken:'tok-dan-002',
+    lessons:[
+      {id:'l7',row:0,day:0,name:'Алгебра',type:'school'},
+      {id:'l8',row:1,day:0,name:'Физика',type:'school'},
+      {id:'l9',row:2,day:1,name:'История',type:'school'},
+      {id:'l10',row:3,day:2,name:'Химия',type:'school'},
+      {id:'l11',row:5,day:3,name:'Программирование',type:'extra'},
+      {id:'l12',row:6,day:4,name:'Футбол',type:'sport'},
+    ],
+    grades:[
+      {id:'g5',date:'2026-05-18',subject:'Алгебра',score:3,workType:'Контрольная'},
+      {id:'g6',date:'2026-05-21',subject:'Физика',score:4,workType:'Тест'},
+      {id:'g7',date:'2026-05-24',subject:'История',score:5,workType:'Устный ответ'},
+      {id:'g8',date:'2026-05-29',subject:'Алгебра',score:4,workType:'Домашнее задание'},
+    ],
+    vacations:[
+      {id:'v3',name:'Летние каникулы',start:'2026-06-01',end:'2026-08-31'},
+      {id:'v4',name:'Осенние каникулы',start:'2026-10-26',end:'2026-11-02'},
+    ],
+  },
+  {
+    id:'c3', name:'Зарина', surname:'Мусина', class:'2В', age:8, school:'Школа №7', color:'pink',
+    accessLevel:'view', accessToken:'tok-zar-003',
+    lessons:[
+      {id:'l13',row:0,day:0,name:'Чтение',type:'school'},
+      {id:'l14',row:1,day:0,name:'Математика',type:'school'},
+      {id:'l15',row:2,day:1,name:'Рисование',type:'extra'},
+      {id:'l16',row:3,day:2,name:'Музыка',type:'music'},
+      {id:'l17',row:4,day:3,name:'Физкультура',type:'sport'},
+    ],
+    grades:[
+      {id:'g9',date:'2026-05-19',subject:'Математика',score:5,workType:'Контрольная'},
+      {id:'g10',date:'2026-05-23',subject:'Чтение',score:5,workType:'Устный ответ'},
+      {id:'g11',date:'2026-05-27',subject:'Рисование',score:5,workType:'Домашнее задание'},
+    ],
+    vacations:[
+      {id:'v5',name:'Летние каникулы',start:'2026-06-01',end:'2026-08-31'},
+      {id:'v6',name:'Осенние каникулы',start:'2026-10-27',end:'2026-11-01'},
+    ],
+  },
+];
+
+const INITIAL_EXPENSES = [
+  {id:'e1',childId:'c1',category:'Школьный сбор',amount:15000,date:'2026-05-01',status:'paid'},
+  {id:'e2',childId:'c1',category:'Репетитор',amount:20000,date:'2026-05-10',status:'paid'},
+  {id:'e3',childId:'c1',category:'Кружки / секции',amount:8000,date:'2026-05-15',status:'pending'},
+  {id:'e4',childId:'c2',category:'Школьный сбор',amount:15000,date:'2026-05-01',status:'paid'},
+  {id:'e5',childId:'c2',category:'Репетитор',amount:25000,date:'2026-05-12',status:'paid'},
+  {id:'e6',childId:'c2',category:'Кружки / секции',amount:10000,date:'2026-05-20',status:'overdue'},
+  {id:'e7',childId:'c3',category:'Школьный сбор',amount:12000,date:'2026-05-01',status:'paid'},
+  {id:'e8',childId:'c3',category:'Форма / одежда',amount:18000,date:'2026-05-08',status:'paid'},
+  {id:'e9',childId:'c3',category:'Питание',amount:9000,date:'2026-05-30',status:'pending'},
+];
+
+const INITIAL_NOTIFICATIONS = [
+  {id:'n1',childId:'c1',school:'Школа №1',text:'Родительское собрание 5 июня в 18:00. Явка обязательна.',time:'2 часа назад',read:false,icon:'📢'},
+  {id:'n2',childId:'c2',school:'Школа №3',text:'Олимпиада по математике перенесена на 10 июня.',time:'Вчера',read:false,icon:'📝'},
+  {id:'n3',childId:'c3',school:'Школа №7',text:'Праздник последнего звонка — 25 мая в 10:00.',time:'3 дня назад',read:true,icon:'🎉'},
+  {id:'n4',childId:'c1',school:'Школа №1',text:'Напоминание: сдать взносы на учебники до 7 июня.',time:'4 дня назад',read:true,icon:'💰'},
+  {id:'n5',childId:'c2',school:'Школа №3',text:'Спортивные соревнования 15 июня. Нужна справка от врача.',time:'5 дней назад',read:false,icon:'🏅'},
+];
+
+const INITIAL_CHANGE_REQUESTS = [
+  {id:'cr1',childId:'c2',type:'move',lessonName:'Программирование',newTime:'Среда 16:00',reason:'Конфликт с тренировкой по футболу',status:'pending',createdAt:'2026-05-30'},
+];
+
+const INITIAL_TRIPS = [
+  {id:'t1',name:'Летний отпуск в Алматы',start:'2026-07-10',end:'2026-07-25'},
+];
+
+// ─── UTILS ───────────────────────────────────────────────────────────────────
+let idCounter = 1000;
+const uid = () => `id-${++idCounter}-${Math.random().toString(36).slice(2,7)}`;
+
+function avg(arr) { return arr.length ? (arr.reduce((s,v)=>s+v,0)/arr.length) : 0; }
+
+function getChildSubjectAverages(child) {
+  const map = {};
+  child.grades.forEach(g => {
+    if (!map[g.subject]) map[g.subject] = [];
+    map[g.subject].push(g.score);
+  });
+  const result = {};
+  Object.keys(map).forEach(s => result[s] = parseFloat(avg(map[s]).toFixed(2)));
+  return result;
+}
+
+function getChildAvgScore(child) {
+  if (!child.grades.length) return 0;
+  return parseFloat(avg(child.grades.map(g=>g.score)).toFixed(2));
+}
+
+function formatDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return d.toLocaleDateString('ru-RU');
+}
+
+function isoToDate(iso) { return new Date(iso + 'T00:00:00'); }
+
+function getDaysInMonth(year, month) { return new Date(year, month+1, 0).getDate(); }
+
+function getFirstDayOfMonth(year, month) {
+  const d = new Date(year, month, 1).getDay();
+  return d === 0 ? 6 : d - 1; // Monday=0
+}
+
+// ─── TOAST ───────────────────────────────────────────────────────────────────
+function Toast({ msg, onDone }) {
+  useEffect(() => { const t = setTimeout(onDone, 3000); return ()=>clearTimeout(t); }, []);
+  return (
+    <div className="toast fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white px-5 py-3 rounded-xl shadow-2xl text-sm font-medium">
+      {msg}
+    </div>
+  );
+}
+
+// ─── MODAL ───────────────────────────────────────────────────────────────────
+function Modal({ title, onClose, children, wide }) {
+  useEffect(() => {
+    const esc = e => { if (e.key==='Escape') onClose(); };
+    document.addEventListener('keydown', esc);
+    return () => document.removeEventListener('keydown', esc);
+  }, []);
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className={`bg-white rounded-2xl shadow-2xl w-full ${wide?'max-w-2xl':'max-w-md'} max-h-[90vh] overflow-y-auto`}>
+        <div className="flex items-center justify-between p-5 border-b border-gray-100">
+          <h2 className="text-lg font-semibold text-gray-800">{title}</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">×</button>
+        </div>
+        <div className="p-5">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+// ─── FORM HELPERS ─────────────────────────────────────────────────────────────
+function Label({ children }) { return <label className="block text-sm font-medium text-gray-700 mb-1">{children}</label>; }
+function Input({ ...p }) { return <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" {...p}/>; }
+function Select({ children, ...p }) { return <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" {...p}>{children}</select>; }
+function Btn({ children, variant='primary', sm, ...p }) {
+  const base = 'font-medium rounded-lg transition-all focus:outline-none';
+  const size = sm ? 'px-3 py-1.5 text-xs' : 'px-4 py-2 text-sm';
+  const v = {
+    primary: 'bg-blue-600 hover:bg-blue-700 text-white',
+    secondary: 'bg-gray-100 hover:bg-gray-200 text-gray-700',
+    danger: 'bg-red-50 hover:bg-red-100 text-red-600',
+    success: 'bg-green-600 hover:bg-green-700 text-white',
+  };
+  return <button className={`${base} ${size} ${v[variant]}`} {...p}>{children}</button>;
+}
+
+// ─── CHILD AVATAR ─────────────────────────────────────────────────────────────
+function Avatar({ child, size='md', onClick, active }) {
+  const c = COLORS[child.color];
+  const sz = size==='sm' ? 'w-8 h-8 text-xs' : 'w-10 h-10 text-sm';
+  return (
+    <button
+      onClick={onClick}
+      className={`${sz} rounded-full ${c.bg} text-white font-bold flex items-center justify-center transition-all ring-2 ${active ? 'ring-offset-2 ring-gray-800 scale-110' : 'ring-transparent hover:scale-105'}`}
+      title={child.name}
+    >
+      {child.name[0]}
+    </button>
+  );
+}
+
+// ─── SCORE BADGE ──────────────────────────────────────────────────────────────
+function ScoreBadge({ score }) {
+  const colors = { 5:'bg-green-100 text-green-700', 4:'bg-blue-100 text-blue-700', 3:'bg-amber-100 text-amber-700', 2:'bg-red-100 text-red-700' };
+  return <span className={`${colors[score]||'bg-gray-100 text-gray-700'} px-2 py-0.5 rounded-full text-xs font-bold`}>{score}</span>;
+}
+
+// ─── STATUS BADGE ─────────────────────────────────────────────────────────────
+function StatusBadge({ status }) {
+  const map = { paid:'bg-green-100 text-green-700', pending:'bg-amber-100 text-amber-700', overdue:'bg-red-100 text-red-700' };
+  const labels = { paid:'Оплачено', pending:'Ожидается', overdue:'Просрочено' };
+  return <span className={`${map[status]} px-2 py-0.5 rounded-full text-xs font-medium`}>{labels[status]}</span>;
+}
+
+// ─── PROGRESS BAR ─────────────────────────────────────────────────────────────
+function ProgressBar({ value, max, color='bg-blue-500' }) {
+  const pct = max ? Math.min(100, Math.round(value/max*100)) : 0;
+  return (
+    <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+      <div className={`h-full ${color} progress-bar rounded-full`} style={{width:`${pct}%`}}/>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TAB: SCHEDULE
+// ═══════════════════════════════════════════════════════════════════════════════
+function ScheduleTab({ children, selectedChild, setSelectedChild, updateChild, toast }) {
+  const [view, setView] = useState('overview'); // overview | individual
+  const [showAddLesson, setShowAddLesson] = useState(false);
+  const [showChangeRequests, setShowChangeRequests] = useState(false);
+  const [changeRequests, setChangeRequests] = useState(INITIAL_CHANGE_REQUESTS);
+
+  const child = children.find(c=>c.id===selectedChild) || children[0];
+
+  const today = new Date();
+  const todayDay = today.getDay() === 0 ? 6 : today.getDay() - 1; // 0=Mon
+
+  // Lessons today across all children
+  const todayLessons = [];
+  children.forEach(ch => {
+    ch.lessons.filter(l=>l.day===todayDay).forEach(l => {
+      todayLessons.push({ ...l, childName: ch.name, childColor: ch.color, school: ch.school });
+    });
+  });
+  todayLessons.sort((a,b) => a.row - b.row);
+
+  function addLesson(data) {
+    const lesson = { id: uid(), ...data };
+    updateChild(child.id, c => ({ ...c, lessons: [...c.lessons, lesson] }));
+    setShowAddLesson(false);
+    toast('Урок добавлен ✓');
+  }
+
+  function removeLesson(lessonId) {
+    updateChild(child.id, c => ({ ...c, lessons: c.lessons.filter(l=>l.id!==lessonId) }));
+    toast('Урок удалён');
+  }
+
+  function approveRequest(id, approve) {
+    setChangeRequests(prev => prev.map(r => r.id===id ? { ...r, status: approve?'approved':'declined' } : r));
+    toast(approve ? 'Запрос одобрен ✓' : 'Запрос отклонён');
+  }
+
+  const pendingRequests = changeRequests.filter(r=>r.status==='pending');
+
+  return (
+    <div>
+      {/* Sub-nav */}
+      <div className="flex gap-2 mb-5">
+        <Btn variant={view==='overview'?'primary':'secondary'} onClick={()=>setView('overview')}>Обзор всех детей</Btn>
+        <Btn variant={view==='individual'?'primary':'secondary'} onClick={()=>setView('individual')}>Расписание ребёнка</Btn>
+        <div className="ml-auto flex items-center gap-2">
+          {pendingRequests.length > 0 && (
+            <button onClick={()=>setShowChangeRequests(true)} className="relative bg-amber-50 border border-amber-200 text-amber-700 rounded-lg px-3 py-1.5 text-sm font-medium hover:bg-amber-100">
+              Запросы
+              <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center">{pendingRequests.length}</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {view === 'overview' && (
+        <div>
+          {/* Child cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            {children.map(ch => {
+              const c = COLORS[ch.color];
+              const todayCount = ch.lessons.filter(l=>l.day===todayDay).length;
+              return (
+                <div key={ch.id} className={`bg-white rounded-xl p-4 border-l-4 ${c.border} shadow-sm cursor-pointer hover:shadow-md transition-shadow`}
+                  onClick={() => { setSelectedChild(ch.id); setView('individual'); }}>
+                  <div className="flex items-center gap-3 mb-2">
+                    <Avatar child={ch} size="md" />
+                    <div>
+                      <div className="font-semibold text-gray-800">{ch.name}</div>
+                      <div className="text-xs text-gray-500">{ch.class} · {ch.school}</div>
+                    </div>
+                  </div>
+                  <div className="text-xs text-gray-500">Сегодня уроков: <span className="font-semibold text-gray-700">{todayCount}</span></div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Today's lessons */}
+          <div className="bg-white rounded-xl p-5 shadow-sm">
+            <h3 className="font-semibold text-gray-800 mb-4">📅 Уроки сегодня — {DAYS[todayDay] || 'Выходной'}</h3>
+            {todayLessons.length === 0 ? (
+              <p className="text-gray-400 text-sm">Сегодня уроков нет или выходной день</p>
+            ) : (
+              <div className="space-y-2">
+                {todayLessons.map((l,i) => {
+                  const c = COLORS[l.childColor];
+                  return (
+                    <div key={i} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                      <span className="text-xs font-mono text-gray-500 w-12">{TIME_SLOTS[l.row]}</span>
+                      <span className={`w-2 h-2 rounded-full ${c.bg}`}/>
+                      <span className="flex-1 text-sm font-medium text-gray-800">{l.name}</span>
+                      <span className="text-xs text-gray-500">{l.childName}</span>
+                      <span className={`text-xs px-2 py-0.5 rounded-full border ${LESSON_TYPES[l.type].color}`}>{LESSON_TYPES[l.type].label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {view === 'individual' && child && (
+        <div>
+          {/* Child selector */}
+          <div className="flex items-center gap-3 mb-5 bg-white rounded-xl p-3 shadow-sm">
+            {children.map(ch => <Avatar key={ch.id} child={ch} active={ch.id===child.id} onClick={()=>setSelectedChild(ch.id)}/>)}
+            <span className="ml-2 font-semibold text-gray-700">{child.name} {child.surname} — {child.class}</span>
+            <div className="ml-auto">
+              <Btn onClick={()=>setShowAddLesson(true)}>+ Добавить урок</Btn>
+            </div>
+          </div>
+
+          {/* Weekly grid */}
+          <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
+            <table className="w-full min-w-[600px]">
+              <thead>
+                <tr>
+                  <th className="w-20 p-3 text-xs font-medium text-gray-500 border-b border-gray-100 text-left">Время</th>
+                  {DAYS.map(d => <th key={d} className="p-3 text-xs font-medium text-gray-600 border-b border-gray-100 text-center">{d}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {TIME_SLOTS.map((time, row) => (
+                  <tr key={row} className="hover:bg-gray-50">
+                    <td className="p-3 text-xs font-mono text-gray-400 border-b border-gray-50">{time}</td>
+                    {DAYS.map((_, day) => {
+                      const lesson = child.lessons.find(l=>l.row===row && l.day===day);
+                      return (
+                        <td key={day} className="p-2 border-b border-gray-50 text-center">
+                          {lesson ? (
+                            <div className={`rounded-lg px-2 py-1.5 text-xs border cursor-pointer group relative ${LESSON_TYPES[lesson.type].color}`}>
+                              <div className="font-medium">{lesson.name}</div>
+                              <div className="text-xs opacity-70">{LESSON_TYPES[lesson.type].label}</div>
+                              <button onClick={()=>removeLesson(lesson.id)}
+                                className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full text-xs hidden group-hover:flex items-center justify-center">×</button>
+                            </div>
+                          ) : <div className="h-8"/>}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Legend */}
+          <div className="flex flex-wrap gap-3 mt-3">
+            {Object.entries(LESSON_TYPES).map(([k,v]) => (
+              <div key={k} className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs border ${v.color}`}>
+                <span className="w-2 h-2 rounded-full bg-current opacity-60"/>
+                {v.label}
+              </div>
+            ))}
+          </div>
+
+          {/* Access link */}
+          <div className="mt-4 bg-blue-50 border border-blue-200 rounded-xl p-4">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div>
+                <div className="text-sm font-medium text-blue-800">Ссылка для {child.name}</div>
+                <div className="text-xs text-blue-600 font-mono mt-0.5">planifier.app/child/{child.accessToken}</div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-blue-700">Доступ:</span>
+                <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full font-medium">
+                  {{ view:'Только просмотр', suggest:'Может предлагать', full:'Полный доступ' }[child.accessLevel]}
+                </span>
+                <Btn sm variant="secondary" onClick={()=>{navigator.clipboard?.writeText(`planifier.app/child/${child.accessToken}`); toast('Ссылка скопирована ✓');}}>Копировать</Btn>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Lesson Modal */}
+      {showAddLesson && (
+        <AddLessonModal onClose={()=>setShowAddLesson(false)} onSave={addLesson}/>
+      )}
+
+      {/* Change Requests Modal */}
+      {showChangeRequests && (
+        <Modal title="Запросы на изменение расписания" onClose={()=>setShowChangeRequests(false)}>
+          <div className="space-y-3">
+            {changeRequests.map(r => {
+              const ch = children.find(c=>c.id===r.childId);
+              const statusColors = {pending:'bg-amber-50 border-amber-200', approved:'bg-green-50 border-green-200', declined:'bg-red-50 border-red-200'};
+              return (
+                <div key={r.id} className={`rounded-xl border p-4 ${statusColors[r.status]}`}>
+                  <div className="flex items-center gap-2 mb-2">
+                    {ch && <Avatar child={ch} size="sm"/>}
+                    <span className="font-medium text-sm">{ch?.name}</span>
+                    <span className="text-xs text-gray-500">{formatDate(r.createdAt)}</span>
+                    <span className={`ml-auto text-xs px-2 py-0.5 rounded-full ${r.status==='pending'?'bg-amber-100 text-amber-700':r.status==='approved'?'bg-green-100 text-green-700':'bg-red-100 text-red-700'}`}>
+                      {{pending:'Ожидает',approved:'Одобрено',declined:'Отклонено'}[r.status]}
+                    </span>
+                  </div>
+                  <div className="text-sm text-gray-700 mb-1"><span className="font-medium">{r.lessonName}</span> → {r.newTime}</div>
+                  <div className="text-xs text-gray-500 mb-3">Причина: {r.reason}</div>
+                  {r.status==='pending' && (
+                    <div className="flex gap-2">
+                      <Btn sm variant="success" onClick={()=>approveRequest(r.id,true)}>✓ Одобрить</Btn>
+                      <Btn sm variant="danger" onClick={()=>approveRequest(r.id,false)}>✗ Отклонить</Btn>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function AddLessonModal({ onClose, onSave }) {
+  const [form, setForm] = useState({ name:'', day:0, row:0, type:'school' });
+  const set = k => e => setForm(f=>({...f,[k]:e.target.value}));
+  function save() {
+    if (!form.name.trim()) return;
+    onSave({ name:form.name.trim(), day:parseInt(form.day), row:parseInt(form.row), type:form.type });
+  }
+  return (
+    <Modal title="Добавить урок" onClose={onClose}>
+      <div className="space-y-3">
+        <div><Label>Название урока</Label><Input value={form.name} onChange={set('name')} placeholder="Математика"/></div>
+        <div><Label>День недели</Label>
+          <Select value={form.day} onChange={set('day')}>
+            {DAYS.map((d,i)=><option key={i} value={i}>{d}</option>)}
+          </Select>
+        </div>
+        <div><Label>Время</Label>
+          <Select value={form.row} onChange={set('row')}>
+            {TIME_SLOTS.map((t,i)=><option key={i} value={i}>{t}</option>)}
+          </Select>
+        </div>
+        <div><Label>Тип занятия</Label>
+          <Select value={form.type} onChange={set('type')}>
+            {Object.entries(LESSON_TYPES).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}
+          </Select>
+        </div>
+        <div className="flex gap-2 pt-2">
+          <Btn onClick={save}>Добавить</Btn>
+          <Btn variant="secondary" onClick={onClose}>Отмена</Btn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TAB: VACATIONS & TRIPS
+// ═══════════════════════════════════════════════════════════════════════════════
+function VacationsTab({ children, updateChild, toast }) {
+  const [calYear, setCalYear] = useState(2026);
+  const [calMonth, setCalMonth] = useState(5); // June
+  const [trips, setTrips] = useState(INITIAL_TRIPS);
+  const [showAddVac, setShowAddVac] = useState(null); // childId
+  const [showAddTrip, setShowAddTrip] = useState(false);
+  const [selectedChild, setSelectedChild] = useState(null);
+
+  function addVacation(childId, data) {
+    updateChild(childId, c => ({ ...c, vacations: [...c.vacations, { id: uid(), ...data }] }));
+    setShowAddVac(null);
+    toast('Каникулы добавлены ✓');
+  }
+
+  function removeVacation(childId, vacId) {
+    updateChild(childId, c => ({ ...c, vacations: c.vacations.filter(v=>v.id!==vacId) }));
+    toast('Период удалён');
+  }
+
+  function addTrip(data) {
+    setTrips(t => [...t, { id: uid(), ...data }]);
+    setShowAddTrip(false);
+    toast('Отпуск запланирован ✓');
+  }
+
+  // Build calendar day data
+  const daysInMonth = getDaysInMonth(calYear, calMonth);
+  const firstDay = getFirstDayOfMonth(calYear, calMonth);
+
+  function getDayType(date) {
+    const iso = date.toISOString().slice(0,10);
+    const dw = date.getDay();
+    if (dw===0||dw===6) return 'weekend';
+    // Trip?
+    const inTrip = trips.some(t => iso>=t.start && iso<=t.end);
+    if (inTrip) return 'trip';
+    // All children on vacation?
+    const allVac = children.every(ch => ch.vacations.some(v => iso>=v.start && iso<=v.end));
+    if (allVac && children.length>0) return 'all-vac';
+    // Any child on vacation?
+    const anyVac = children.some(ch => ch.vacations.some(v => iso>=v.start && iso<=v.end));
+    if (anyVac) return 'some-vac';
+    return 'school';
+  }
+
+  const dayColors = {
+    weekend: 'bg-gray-50 text-gray-400',
+    school: 'bg-blue-50 text-blue-800 hover:bg-blue-100',
+    'some-vac': 'bg-orange-100 text-orange-800',
+    'all-vac': 'bg-purple-100 text-purple-800 font-semibold',
+    trip: 'bg-green-100 text-green-800',
+  };
+
+  const calCells = [];
+  for (let i=0; i<firstDay; i++) calCells.push(null);
+  for (let d=1; d<=daysInMonth; d++) {
+    calCells.push(new Date(calYear, calMonth, d));
+  }
+
+  const prevMonth = () => { if (calMonth===0) { setCalYear(y=>y-1); setCalMonth(11); } else setCalMonth(m=>m-1); };
+  const nextMonth = () => { if (calMonth===11) { setCalYear(y=>y+1); setCalMonth(0); } else setCalMonth(m=>m+1); };
+
+  // Count days until next vacation for each child
+  const today = new Date().toISOString().slice(0,10);
+
+  return (
+    <div className="space-y-6">
+      {/* Calendar */}
+      <div className="bg-white rounded-xl shadow-sm p-5">
+        <div className="flex items-center justify-between mb-4">
+          <button onClick={prevMonth} className="p-2 hover:bg-gray-100 rounded-lg">‹</button>
+          <h3 className="font-semibold text-gray-800">{MONTHS_RU[calMonth]} {calYear}</h3>
+          <button onClick={nextMonth} className="p-2 hover:bg-gray-100 rounded-lg">›</button>
+        </div>
+        <div className="grid grid-cols-7 gap-1 mb-2">
+          {['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].map(d=><div key={d} className="text-center text-xs font-medium text-gray-400 py-1">{d}</div>)}
+        </div>
+        <div className="grid grid-cols-7 gap-1">
+          {calCells.map((date, i) => {
+            if (!date) return <div key={i}/>;
+            const type = getDayType(date);
+            return (
+              <div key={i} className={`aspect-square flex items-center justify-center text-sm rounded-lg cursor-default transition-colors ${dayColors[type]}`}>
+                {date.getDate()}
+              </div>
+            );
+          })}
+        </div>
+        {/* Legend */}
+        <div className="flex flex-wrap gap-3 mt-4 text-xs">
+          {[
+            {color:'bg-blue-100 text-blue-700',label:'Учебный день'},
+            {color:'bg-orange-100 text-orange-700',label:'Каникулы'},
+            {color:'bg-purple-100 text-purple-700',label:'Все дети свободны 🎯'},
+            {color:'bg-green-100 text-green-700',label:'Запланированный отпуск'},
+            {color:'bg-gray-100 text-gray-500',label:'Выходной'},
+          ].map(({color,label})=>(
+            <div key={label} className="flex items-center gap-1.5">
+              <div className={`w-3 h-3 rounded ${color}`}/>
+              <span className="text-gray-600">{label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Vacations per child */}
+        <div className="bg-white rounded-xl shadow-sm p-5">
+          <h3 className="font-semibold text-gray-800 mb-4">🏫 Каникулы по школам</h3>
+          <div className="space-y-4">
+            {children.map(ch => {
+              const c = COLORS[ch.color];
+              return (
+                <div key={ch.id}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Avatar child={ch} size="sm"/>
+                    <span className="font-medium text-sm">{ch.name}</span>
+                    <span className="text-xs text-gray-500">· {ch.school}</span>
+                    <Btn sm variant="secondary" onClick={()=>setShowAddVac(ch.id)}>+ Добавить</Btn>
+                  </div>
+                  {ch.vacations.length===0 && <p className="text-xs text-gray-400 ml-10">Нет каникул</p>}
+                  <div className="space-y-1 ml-10">
+                    {ch.vacations.map(v=>(
+                      <div key={v.id} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2 text-xs">
+                        <span className="font-medium text-gray-700">{v.name}</span>
+                        <span className="text-gray-500">{formatDate(v.start)} – {formatDate(v.end)}</span>
+                        <button onClick={()=>removeVacation(ch.id,v.id)} className="text-red-400 hover:text-red-600 ml-2">×</button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Trips */}
+        <div className="bg-white rounded-xl shadow-sm p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-gray-800">✈️ Запланированный отпуск</h3>
+            <Btn sm onClick={()=>setShowAddTrip(true)}>+ Отпуск</Btn>
+          </div>
+          {trips.length===0 && <p className="text-sm text-gray-400">Отпуска не запланированы</p>}
+          <div className="space-y-3">
+            {trips.map(t=>(
+              <div key={t.id} className="bg-green-50 border border-green-200 rounded-xl p-3">
+                <div className="font-medium text-green-800 text-sm">{t.name}</div>
+                <div className="text-xs text-green-600 mt-1">{formatDate(t.start)} – {formatDate(t.end)}</div>
+                <div className="text-xs text-green-700 mt-1">
+                  {Math.ceil((isoToDate(t.end)-isoToDate(t.start))/(1000*60*60*24))+1} дней
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* "Windows" hint */}
+          <div className="mt-4 bg-purple-50 border border-purple-200 rounded-xl p-3">
+            <div className="text-xs font-medium text-purple-800 mb-1">🎯 Окна для отпуска</div>
+            <div className="text-xs text-purple-700">
+              Фиолетовые дни в календаре — все дети одновременно на каникулах. Июнь–август 2026 полностью свободен.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Add vacation modal */}
+      {showAddVac && (
+        <AddVacModal childName={children.find(c=>c.id===showAddVac)?.name} onClose={()=>setShowAddVac(null)} onSave={data=>addVacation(showAddVac,data)}/>
+      )}
+      {showAddTrip && (
+        <AddTripModal onClose={()=>setShowAddTrip(false)} onSave={addTrip}/>
+      )}
+    </div>
+  );
+}
+
+function AddVacModal({ childName, onClose, onSave }) {
+  const [form, setForm] = useState({ name:'', start:'', end:'' });
+  const set = k => e => setForm(f=>({...f,[k]:e.target.value}));
+  return (
+    <Modal title={`Каникулы — ${childName}`} onClose={onClose}>
+      <div className="space-y-3">
+        <div><Label>Название периода</Label><Input value={form.name} onChange={set('name')} placeholder="Летние каникулы"/></div>
+        <div><Label>Начало</Label><Input type="date" value={form.start} onChange={set('start')}/></div>
+        <div><Label>Конец</Label><Input type="date" value={form.end} onChange={set('end')}/></div>
+        <div className="flex gap-2 pt-2">
+          <Btn onClick={()=>{if(form.name&&form.start&&form.end) onSave(form);}}>Добавить</Btn>
+          <Btn variant="secondary" onClick={onClose}>Отмена</Btn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function AddTripModal({ onClose, onSave }) {
+  const [form, setForm] = useState({ name:'', start:'', end:'' });
+  const set = k => e => setForm(f=>({...f,[k]:e.target.value}));
+  return (
+    <Modal title="Запланировать отпуск" onClose={onClose}>
+      <div className="space-y-3">
+        <div><Label>Название</Label><Input value={form.name} onChange={set('name')} placeholder="Поездка в Алматы"/></div>
+        <div><Label>Дата начала</Label><Input type="date" value={form.start} onChange={set('start')}/></div>
+        <div><Label>Дата конца</Label><Input type="date" value={form.end} onChange={set('end')}/></div>
+        <div className="flex gap-2 pt-2">
+          <Btn onClick={()=>{if(form.name&&form.start&&form.end) onSave(form);}}>Запланировать</Btn>
+          <Btn variant="secondary" onClick={onClose}>Отмена</Btn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TAB: GRADES
+// ═══════════════════════════════════════════════════════════════════════════════
+function GradesTab({ children, selectedChild, setSelectedChild, updateChild, toast }) {
+  const [view, setView] = useState('overview');
+  const [showAddGrade, setShowAddGrade] = useState(false);
+
+  const child = children.find(c=>c.id===selectedChild) || children[0];
+
+  function addGrade(data) {
+    const grade = { id: uid(), ...data };
+    updateChild(child.id, c => ({ ...c, grades: [grade, ...c.grades] }));
+    setShowAddGrade(false);
+    toast('Оценка добавлена ✓');
+  }
+
+  // Recent grades across all children
+  const allGrades = [];
+  children.forEach(ch => ch.grades.forEach(g => allGrades.push({...g, childName:ch.name, childColor:ch.color, childId:ch.id})));
+  allGrades.sort((a,b) => b.date.localeCompare(a.date));
+
+  return (
+    <div>
+      <div className="flex gap-2 mb-5">
+        <Btn variant={view==='overview'?'primary':'secondary'} onClick={()=>setView('overview')}>Обзор</Btn>
+        <Btn variant={view==='individual'?'primary':'secondary'} onClick={()=>setView('individual')}>По ребёнку</Btn>
+        <div className="ml-auto"><Btn onClick={()=>setShowAddGrade(true)}>+ Добавить оценку</Btn></div>
+      </div>
+
+      {view==='overview' && (
+        <div className="space-y-5">
+          {/* Child score cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {children.map(ch => {
+              const avg = getChildAvgScore(ch);
+              const subjects = getChildSubjectAverages(ch);
+              const best = Object.entries(subjects).sort((a,b)=>b[1]-a[1])[0];
+              const worst = Object.entries(subjects).sort((a,b)=>a[1]-b[1])[0];
+              const c = COLORS[ch.color];
+              return (
+                <div key={ch.id} className={`bg-white rounded-xl p-4 border-l-4 ${c.border} shadow-sm cursor-pointer hover:shadow-md transition-shadow`}
+                  onClick={()=>{setSelectedChild(ch.id);setView('individual');}}>
+                  <div className="flex items-center gap-3 mb-3">
+                    <Avatar child={ch} size="md"/>
+                    <div>
+                      <div className="font-semibold text-gray-800">{ch.name}</div>
+                      <div className="text-xs text-gray-500">{ch.class}</div>
+                    </div>
+                    <div className="ml-auto">
+                      <div className={`text-2xl font-bold ${avg>=4.5?'text-green-600':avg>=3.5?'text-blue-600':avg>=2.5?'text-amber-600':'text-red-600'}`}>{avg||'—'}</div>
+                    </div>
+                  </div>
+                  <ProgressBar value={avg} max={5} color={avg>=4?'bg-green-500':avg>=3?'bg-amber-500':'bg-red-500'}/>
+                  {best && <div className="text-xs text-gray-500 mt-2">🏆 {best[0]} · ⚠️ {worst[0]}</div>}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Recent grades table */}
+          <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+            <div className="p-4 border-b border-gray-100"><h3 className="font-semibold text-gray-800">Последние оценки</h3></div>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    {['Дата','Ребёнок','Предмет','Оценка','Тип работы'].map(h=>(
+                      <th key={h} className="px-4 py-2 text-xs font-medium text-gray-500 text-left">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {allGrades.slice(0,15).map(g => {
+                    const c = COLORS[g.childColor];
+                    return (
+                      <tr key={g.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-2 text-xs text-gray-500">{formatDate(g.date)}</td>
+                        <td className="px-4 py-2">
+                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${c.light} ${c.text}`}>{g.childName}</span>
+                        </td>
+                        <td className="px-4 py-2 text-sm text-gray-700">{g.subject}</td>
+                        <td className="px-4 py-2"><ScoreBadge score={g.score}/></td>
+                        <td className="px-4 py-2 text-xs text-gray-500">{g.workType}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {view==='individual' && child && (
+        <div className="space-y-5">
+          {/* Child selector */}
+          <div className="flex items-center gap-3 bg-white rounded-xl p-3 shadow-sm">
+            {children.map(ch=><Avatar key={ch.id} child={ch} active={ch.id===child.id} onClick={()=>setSelectedChild(ch.id)}/>)}
+            <span className="ml-2 font-semibold text-gray-700">{child.name}</span>
+          </div>
+
+          {/* Summary */}
+          {(() => {
+            const avg = getChildAvgScore(child);
+            const subjects = getChildSubjectAverages(child);
+            const sorted = Object.entries(subjects).sort((a,b)=>b[1]-a[1]);
+            const best = sorted[0];
+            const worst = sorted[sorted.length-1];
+            return (
+              <div className="grid grid-cols-3 gap-4">
+                <div className="bg-white rounded-xl p-4 shadow-sm text-center">
+                  <div className={`text-3xl font-bold mb-1 ${avg>=4.5?'text-green-600':avg>=3.5?'text-blue-600':'text-amber-600'}`}>{avg||'—'}</div>
+                  <div className="text-xs text-gray-500">Средний балл</div>
+                </div>
+                <div className="bg-green-50 rounded-xl p-4 shadow-sm text-center">
+                  <div className="text-sm font-semibold text-green-700">🏆 {best?.[0]||'—'}</div>
+                  <div className="text-xs text-green-600 mt-1">Лучший предмет</div>
+                </div>
+                <div className="bg-amber-50 rounded-xl p-4 shadow-sm text-center">
+                  <div className="text-sm font-semibold text-amber-700">⚠️ {worst?.[0]||'—'}</div>
+                  <div className="text-xs text-amber-600 mt-1">Требует внимания</div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Subjects */}
+          <div className="bg-white rounded-xl p-5 shadow-sm">
+            <h3 className="font-semibold text-gray-800 mb-4">По предметам</h3>
+            {Object.entries(getChildSubjectAverages(child)).length===0 && <p className="text-sm text-gray-400">Оценок нет</p>}
+            <div className="space-y-3">
+              {Object.entries(getChildSubjectAverages(child)).map(([subj,avg])=>(
+                <div key={subj}>
+                  <div className="flex justify-between text-sm mb-1">
+                    <span className="text-gray-700">{subj}</span>
+                    <span className={`font-semibold ${avg>=4.5?'text-green-600':avg>=3.5?'text-blue-600':avg>=2.5?'text-amber-600':'text-red-600'}`}>{avg}</span>
+                  </div>
+                  <ProgressBar value={avg} max={5} color={avg>=4?'bg-green-500':avg>=3?'bg-amber-500':'bg-red-500'}/>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Grades history */}
+          <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+            <div className="p-4 border-b border-gray-100"><h3 className="font-semibold text-gray-800">История оценок</h3></div>
+            {child.grades.length===0 && <p className="p-4 text-sm text-gray-400">Оценок нет</p>}
+            <div className="divide-y divide-gray-50">
+              {[...child.grades].sort((a,b)=>b.date.localeCompare(a.date)).map(g=>(
+                <div key={g.id} className="flex items-center gap-3 px-4 py-2 hover:bg-gray-50">
+                  <span className="text-xs text-gray-400 w-24">{formatDate(g.date)}</span>
+                  <span className="flex-1 text-sm text-gray-700">{g.subject}</span>
+                  <span className="text-xs text-gray-500">{g.workType}</span>
+                  <ScoreBadge score={g.score}/>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAddGrade && (
+        <AddGradeModal children={children} selectedChild={child?.id} onClose={()=>setShowAddGrade(false)} onSave={(childId, data)=>{
+          const grade = { id:uid(), ...data };
+          updateChild(childId, c=>({...c, grades:[grade,...c.grades]}));
+          setShowAddGrade(false);
+          toast('Оценка добавлена ✓');
+        }}/>
+      )}
+    </div>
+  );
+}
+
+function AddGradeModal({ children, selectedChild, onClose, onSave }) {
+  const [childId, setChildId] = useState(selectedChild||children[0]?.id);
+  const [form, setForm] = useState({ date: new Date().toISOString().slice(0,10), subject:'', score:5, workType:'Контрольная' });
+  const set = k => e => setForm(f=>({...f,[k]:e.target.value}));
+  return (
+    <Modal title="Добавить оценку" onClose={onClose}>
+      <div className="space-y-3">
+        <div><Label>Ребёнок</Label>
+          <Select value={childId} onChange={e=>setChildId(e.target.value)}>
+            {children.map(ch=><option key={ch.id} value={ch.id}>{ch.name}</option>)}
+          </Select>
+        </div>
+        <div><Label>Предмет</Label><Input value={form.subject} onChange={set('subject')} placeholder="Математика"/></div>
+        <div><Label>Оценка</Label>
+          <Select value={form.score} onChange={set('score')}>
+            {[5,4,3,2].map(s=><option key={s} value={s}>{s}</option>)}
+          </Select>
+        </div>
+        <div><Label>Тип работы</Label>
+          <Select value={form.workType} onChange={set('workType')}>
+            {WORK_TYPES.map(w=><option key={w} value={w}>{w}</option>)}
+          </Select>
+        </div>
+        <div><Label>Дата</Label><Input type="date" value={form.date} onChange={set('date')}/></div>
+        <div className="flex gap-2 pt-2">
+          <Btn onClick={()=>{if(form.subject.trim()) onSave(childId,{...form, score:parseInt(form.score)});}}>Добавить</Btn>
+          <Btn variant="secondary" onClick={onClose}>Отмена</Btn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TAB: BUDGET
+// ═══════════════════════════════════════════════════════════════════════════════
+function BudgetTab({ children, toast }) {
+  const [expenses, setExpenses] = useState(INITIAL_EXPENSES);
+  const [showAdd, setShowAdd] = useState(false);
+
+  const thisMonth = new Date().toISOString().slice(0,7);
+  const monthExpenses = expenses.filter(e=>e.date.startsWith(thisMonth));
+
+  const totalPaid = monthExpenses.filter(e=>e.status==='paid').reduce((s,e)=>s+e.amount,0);
+  const totalPending = monthExpenses.filter(e=>e.status==='pending').reduce((s,e)=>s+e.amount,0);
+  const totalOverdue = monthExpenses.filter(e=>e.status==='overdue').reduce((s,e)=>s+e.amount,0);
+  const total = totalPaid+totalPending+totalOverdue;
+
+  // By child
+  const byChild = children.map(ch => ({
+    child: ch,
+    amount: monthExpenses.filter(e=>e.childId===ch.id).reduce((s,e)=>s+e.amount,0),
+  }));
+
+  // By category
+  const byCat = {};
+  monthExpenses.forEach(e => { byCat[e.category] = (byCat[e.category]||0)+e.amount; });
+
+  // Upcoming (pending/overdue)
+  const upcoming = [...expenses].filter(e=>e.status!=='paid').sort((a,b)=>a.date.localeCompare(b.date));
+
+  function fmt(n) { return n.toLocaleString('ru-RU')+'₸'; }
+
+  function addExpense(data) {
+    setExpenses(prev=>[{ id:uid(), ...data }, ...prev]);
+    setShowAdd(false);
+    toast('Расход добавлен ✓');
+  }
+
+  return (
+    <div className="space-y-5">
+      {/* Summary row */}
+      <div className="grid grid-cols-3 gap-4">
+        {[
+          {label:'Оплачено',value:totalPaid,color:'text-green-600',bg:'bg-green-50 border-green-200'},
+          {label:'Ожидается',value:totalPending,color:'text-amber-600',bg:'bg-amber-50 border-amber-200'},
+          {label:'Просрочено',value:totalOverdue,color:'text-red-600',bg:'bg-red-50 border-red-200'},
+        ].map(({label,value,color,bg})=>(
+          <div key={label} className={`rounded-xl border p-4 shadow-sm ${bg}`}>
+            <div className={`text-2xl font-bold ${color}`}>{fmt(value)}</div>
+            <div className="text-xs text-gray-600 mt-1">{label}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        {/* By child */}
+        <div className="bg-white rounded-xl p-5 shadow-sm">
+          <h3 className="font-semibold text-gray-800 mb-4">По детям</h3>
+          {total===0 && <p className="text-sm text-gray-400">Нет расходов</p>}
+          <div className="space-y-3">
+            {byChild.map(({child:ch,amount})=>{
+              const c=COLORS[ch.color];
+              return (
+                <div key={ch.id}>
+                  <div className="flex justify-between text-sm mb-1">
+                    <div className="flex items-center gap-2">
+                      <Avatar child={ch} size="sm"/>
+                      <span className="text-gray-700">{ch.name}</span>
+                    </div>
+                    <span className="font-semibold text-gray-800">{fmt(amount)}</span>
+                  </div>
+                  <ProgressBar value={amount} max={total||1} color={c.bg}/>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* By category */}
+        <div className="bg-white rounded-xl p-5 shadow-sm">
+          <h3 className="font-semibold text-gray-800 mb-4">По категориям</h3>
+          {Object.keys(byCat).length===0 && <p className="text-sm text-gray-400">Нет расходов</p>}
+          <div className="space-y-3">
+            {Object.entries(byCat).sort((a,b)=>b[1]-a[1]).map(([cat,amt])=>(
+              <div key={cat}>
+                <div className="flex justify-between text-sm mb-1">
+                  <span className="text-gray-700">{cat}</span>
+                  <span className="font-semibold text-gray-800">{fmt(amt)}</span>
+                </div>
+                <ProgressBar value={amt} max={total||1} color="bg-blue-500"/>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Upcoming payments */}
+      {upcoming.length>0 && (
+        <div className="bg-white rounded-xl p-5 shadow-sm">
+          <h3 className="font-semibold text-gray-800 mb-4">⏰ Предстоящие платежи</h3>
+          <div className="space-y-2">
+            {upcoming.map(e=>{
+              const ch=children.find(c=>c.id===e.childId);
+              return (
+                <div key={e.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                  {ch&&<Avatar child={ch} size="sm"/>}
+                  <span className="flex-1 text-sm text-gray-700">{e.category}{ch?` · ${ch.name}`:''}</span>
+                  <span className="text-xs text-gray-500">{formatDate(e.date)}</span>
+                  <span className="font-semibold text-sm text-gray-800">{fmt(e.amount)}</span>
+                  <StatusBadge status={e.status}/>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Expenses table */}
+      <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+        <div className="flex items-center justify-between p-4 border-b border-gray-100">
+          <h3 className="font-semibold text-gray-800">Все расходы</h3>
+          <Btn onClick={()=>setShowAdd(true)}>+ Расход</Btn>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50">
+              <tr>
+                {['Дата','Ребёнок','Категория','Сумма','Статус'].map(h=>(
+                  <th key={h} className="px-4 py-2 text-xs font-medium text-gray-500 text-left">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {[...expenses].sort((a,b)=>b.date.localeCompare(a.date)).map(e=>{
+                const ch=children.find(c=>c.id===e.childId);
+                return (
+                  <tr key={e.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-2 text-xs text-gray-500">{formatDate(e.date)}</td>
+                    <td className="px-4 py-2">
+                      {ch&&<span className={`text-xs font-medium px-2 py-0.5 rounded-full ${COLORS[ch.color].light} ${COLORS[ch.color].text}`}>{ch.name}</span>}
+                    </td>
+                    <td className="px-4 py-2 text-sm text-gray-700">{e.category}</td>
+                    <td className="px-4 py-2 text-sm font-semibold text-gray-800">{fmt(e.amount)}</td>
+                    <td className="px-4 py-2"><StatusBadge status={e.status}/></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {showAdd && <AddExpenseModal children={children} onClose={()=>setShowAdd(false)} onSave={addExpense}/>}
+    </div>
+  );
+}
+
+function AddExpenseModal({ children, onClose, onSave }) {
+  const [form, setForm] = useState({ childId:children[0]?.id||'', category:'Школьный сбор', amount:'', date:new Date().toISOString().slice(0,10), status:'paid' });
+  const set = k => e => setForm(f=>({...f,[k]:e.target.value}));
+  return (
+    <Modal title="Добавить расход" onClose={onClose}>
+      <div className="space-y-3">
+        <div><Label>Ребёнок</Label>
+          <Select value={form.childId} onChange={set('childId')}>
+            {children.map(ch=><option key={ch.id} value={ch.id}>{ch.name}</option>)}
+          </Select>
+        </div>
+        <div><Label>Категория</Label>
+          <Select value={form.category} onChange={set('category')}>
+            {EXPENSE_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}
+          </Select>
+        </div>
+        <div><Label>Сумма (₸)</Label><Input type="number" value={form.amount} onChange={set('amount')} placeholder="15000"/></div>
+        <div><Label>Дата</Label><Input type="date" value={form.date} onChange={set('date')}/></div>
+        <div><Label>Статус</Label>
+          <Select value={form.status} onChange={set('status')}>
+            <option value="paid">Оплачено</option>
+            <option value="pending">Ожидается</option>
+            <option value="overdue">Просрочено</option>
+          </Select>
+        </div>
+        <div className="flex gap-2 pt-2">
+          <Btn onClick={()=>{if(form.amount) onSave({...form,amount:parseInt(form.amount)});}}>Добавить</Btn>
+          <Btn variant="secondary" onClick={onClose}>Отмена</Btn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TAB: NOTIFICATIONS
+// ═══════════════════════════════════════════════════════════════════════════════
+function NotificationsTab({ children, notifications, setNotifications, toast }) {
+  const [showAdd, setShowAdd] = useState(false);
+
+  const unread = notifications.filter(n=>!n.read).length;
+
+  function markRead(id) { setNotifications(prev=>prev.map(n=>n.id===id?{...n,read:true}:n)); }
+  function markAllRead() { setNotifications(prev=>prev.map(n=>({...n,read:true}))); toast('Все прочитаны ✓'); }
+
+  function addNotification(data) {
+    setNotifications(prev=>[{ id:uid(), ...data, time:'Только что', read:false }, ...prev]);
+    setShowAdd(false);
+    toast('Уведомление добавлено ✓');
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-5">
+        <div className="flex items-center gap-2">
+          <h2 className="font-semibold text-gray-800">Уведомления от школ</h2>
+          {unread>0&&<span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">{unread}</span>}
+        </div>
+        <div className="flex gap-2">
+          {unread>0&&<Btn variant="secondary" onClick={markAllRead}>Прочитать все</Btn>}
+          <Btn onClick={()=>setShowAdd(true)}>+ Уведомление</Btn>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        {notifications.map(n=>{
+          const ch=children.find(c=>c.id===n.childId);
+          const c=ch?COLORS[ch.color]:COLORS.blue;
+          return (
+            <div key={n.id} className={`bg-white rounded-xl p-4 shadow-sm border transition-all ${n.read?'opacity-60 border-gray-100':'border-gray-200'}`}>
+              <div className="flex items-start gap-3">
+                <div className="text-2xl">{n.icon}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    {ch&&<span className={`text-xs font-medium px-2 py-0.5 rounded-full ${c.light} ${c.text}`}>{n.school}</span>}
+                    <span className="text-xs text-gray-400">{n.time}</span>
+                    {!n.read&&<span className="w-2 h-2 bg-blue-500 rounded-full"/>}
+                  </div>
+                  <p className="text-sm text-gray-700">{n.text}</p>
+                </div>
+                {!n.read&&(
+                  <button onClick={()=>markRead(n.id)} className="text-xs text-blue-500 hover:text-blue-700 whitespace-nowrap">✓ Прочитано</button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+        {notifications.length===0&&<p className="text-gray-400 text-sm">Уведомлений нет</p>}
+      </div>
+
+      {showAdd&&<AddNotificationModal children={children} onClose={()=>setShowAdd(false)} onSave={addNotification}/>}
+    </div>
+  );
+}
+
+function AddNotificationModal({ children, onClose, onSave }) {
+  const [form, setForm] = useState({ childId:children[0]?.id||'', text:'', icon:'📢' });
+  const set = k => e => setForm(f=>({...f,[k]:e.target.value}));
+  return (
+    <Modal title="Добавить уведомление" onClose={onClose}>
+      <div className="space-y-3">
+        <div><Label>Ребёнок / школа</Label>
+          <Select value={form.childId} onChange={set('childId')}>
+            {children.map(ch=><option key={ch.id} value={ch.id}>{ch.name} · {ch.school}</option>)}
+          </Select>
+        </div>
+        <div><Label>Текст уведомления</Label>
+          <textarea className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none" rows={3}
+            value={form.text} onChange={set('text')} placeholder="Текст сообщения от школы..."/>
+        </div>
+        <div><Label>Иконка</Label>
+          <div className="flex gap-2 flex-wrap">
+            {['📢','📝','🎉','💰','🏅','📚','⚠️','🔔'].map(ico=>(
+              <button key={ico} onClick={()=>setForm(f=>({...f,icon:ico}))}
+                className={`text-2xl p-2 rounded-lg border-2 ${form.icon===ico?'border-blue-500 bg-blue-50':'border-gray-200 hover:border-gray-300'}`}>{ico}</button>
+            ))}
+          </div>
+        </div>
+        <div className="flex gap-2 pt-2">
+          <Btn onClick={()=>{if(form.text.trim()){ const ch=children.find(c=>c.id===form.childId); onSave({...form,school:ch?.school||''})}}}>Добавить</Btn>
+          <Btn variant="secondary" onClick={onClose}>Отмена</Btn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CHILD MANAGEMENT MODAL
+// ═══════════════════════════════════════════════════════════════════════════════
+function AddChildModal({ onClose, onSave }) {
+  const [form, setForm] = useState({ name:'', surname:'', class:'', age:'', school:'', color:'blue' });
+  const set = k => e => setForm(f=>({...f,[k]:e.target.value}));
+  return (
+    <Modal title="Добавить ребёнка" onClose={onClose}>
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          <div><Label>Имя *</Label><Input value={form.name} onChange={set('name')} placeholder="Айгерим"/></div>
+          <div><Label>Фамилия</Label><Input value={form.surname} onChange={set('surname')} placeholder="Мусина"/></div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div><Label>Класс *</Label><Input value={form.class} onChange={set('class')} placeholder="5A"/></div>
+          <div><Label>Возраст</Label><Input type="number" value={form.age} onChange={set('age')} placeholder="11"/></div>
+        </div>
+        <div><Label>Школа *</Label><Input value={form.school} onChange={set('school')} placeholder="Школа №1"/></div>
+        <div>
+          <Label>Цвет</Label>
+          <div className="flex gap-2 mt-1">
+            {Object.entries(COLORS).map(([key,c])=>(
+              <button key={key} onClick={()=>setForm(f=>({...f,color:key}))}
+                className={`w-8 h-8 rounded-full ${c.bg} ring-2 ring-offset-2 ${form.color===key?'ring-gray-800':'ring-transparent'} transition-all`}/>
+            ))}
+          </div>
+        </div>
+        <div className="flex gap-2 pt-2">
+          <Btn onClick={()=>{if(form.name&&form.class&&form.school) onSave(form);}}>Добавить</Btn>
+          <Btn variant="secondary" onClick={onClose}>Отмена</Btn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MAIN APP
+// ═══════════════════════════════════════════════════════════════════════════════
+function App() {
+  const [children, setChildren] = useState(INITIAL_CHILDREN);
+  const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
+  const [activeTab, setActiveTab] = useState('schedule');
+  const [selectedChild, setSelectedChild] = useState(INITIAL_CHILDREN[0].id);
+  const [showAddChild, setShowAddChild] = useState(false);
+  const [toastMsg, setToastMsg] = useState(null);
+
+  function toast(msg) { setToastMsg(msg); }
+
+  function updateChild(id, fn) {
+    setChildren(prev => prev.map(c => c.id===id ? fn(c) : c));
+  }
+
+  function addChild(data) {
+    const child = {
+      id: uid(), ...data, age: parseInt(data.age)||0,
+      lessons:[], grades:[], vacations:[],
+      accessLevel:'view', accessToken:`tok-${uid()}`,
+    };
+    setChildren(prev=>[...prev, child]);
+    setSelectedChild(child.id);
+    setShowAddChild(false);
+    toast('Профиль ребёнка создан ✓');
+  }
+
+  const unreadCount = notifications.filter(n=>!n.read).length;
+
+  const TABS = [
+    { id:'schedule',    label:'Расписание',       icon:'📅' },
+    { id:'vacations',   label:'Каникулы & Отпуск', icon:'🏖️' },
+    { id:'grades',      label:'Успеваемость',      icon:'📊' },
+    { id:'budget',      label:'Бюджет',            icon:'💰' },
+    { id:'notifications',label:'Уведомления',      icon:'🔔', badge: unreadCount },
+  ];
+
+  return (
+    <div className="min-h-screen bg-slate-50">
+      {/* Header */}
+      <header className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-30">
+        <div className="max-w-6xl mx-auto px-4">
+          <div className="flex items-center h-14 gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">🏠</span>
+              <span className="font-bold text-gray-800 text-sm hidden sm:block">Семейный планировщик</span>
+            </div>
+
+            {/* Child avatars */}
+            <div className="flex items-center gap-2 ml-2">
+              {children.map(ch=>(
+                <Avatar key={ch.id} child={ch} active={ch.id===selectedChild}
+                  onClick={()=>setSelectedChild(ch.id)}/>
+              ))}
+              <button onClick={()=>setShowAddChild(true)}
+                className="w-10 h-10 rounded-full border-2 border-dashed border-gray-300 text-gray-400 hover:border-blue-400 hover:text-blue-500 text-xl flex items-center justify-center transition-colors">
+                +
+              </button>
+            </div>
+
+            {/* Selected child info */}
+            <div className="hidden md:block ml-2">
+              {(() => {
+                const ch = children.find(c=>c.id===selectedChild);
+                if (!ch) return null;
+                const c = COLORS[ch.color];
+                return (
+                  <div className={`text-xs px-3 py-1 rounded-full ${c.light} ${c.text} font-medium`}>
+                    {ch.name} · {ch.class} · {ch.school}
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+
+          {/* Tab navigation */}
+          <div className="flex overflow-x-auto -mb-px">
+            {TABS.map(tab=>(
+              <button key={tab.id} onClick={()=>setActiveTab(tab.id)}
+                className={`flex items-center gap-1.5 px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors relative ${
+                  activeTab===tab.id ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}>
+                <span>{tab.icon}</span>
+                <span className="hidden sm:inline">{tab.label}</span>
+                {tab.badge > 0 && (
+                  <span className="absolute -top-0.5 right-1 bg-red-500 text-white text-xs w-4 h-4 rounded-full flex items-center justify-center">{tab.badge}</span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      </header>
+
+      {/* Main content */}
+      <main className="max-w-6xl mx-auto px-4 py-6">
+        {activeTab==='schedule' && (
+          <ScheduleTab children={children} selectedChild={selectedChild} setSelectedChild={setSelectedChild} updateChild={updateChild} toast={toast}/>
+        )}
+        {activeTab==='vacations' && (
+          <VacationsTab children={children} updateChild={updateChild} toast={toast}/>
+        )}
+        {activeTab==='grades' && (
+          <GradesTab children={children} selectedChild={selectedChild} setSelectedChild={setSelectedChild} updateChild={updateChild} toast={toast}/>
+        )}
+        {activeTab==='budget' && (
+          <BudgetTab children={children} toast={toast}/>
+        )}
+        {activeTab==='notifications' && (
+          <NotificationsTab children={children} notifications={notifications} setNotifications={setNotifications} toast={toast}/>
+        )}
+      </main>
+
+      {/* Add child modal */}
+      {showAddChild && <AddChildModal onClose={()=>setShowAddChild(false)} onSave={addChild}/>}
+
+      {/* Toast */}
+      {toastMsg && <Toast msg={toastMsg} onDone={()=>setToastMsg(null)}/>}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
