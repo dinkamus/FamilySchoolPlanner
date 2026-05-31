@@ -2149,6 +2149,298 @@ function AddExamForm({ onClose, onSave }) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════════
+// TAB: HOME DASHBOARD
+// ═══════════════════════════════════════════════════════════════════════════════
+function HomeTab({ children, user, isParent, myChildId, notifications, setActiveTab, toast }) {
+  const now = new Date();
+  const todayIdx = now.getDay() === 0 ? 6 : now.getDay() - 1;
+  const todayStr = now.toISOString().slice(0,10);
+  const hours = now.getHours();
+  const greeting = hours < 12 ? 'Доброе утро' : hours < 17 ? 'Добрый день' : 'Добрый вечер';
+  const DAYS_FULL = ['Понедельник','Вторник','Среда','Четверг','Пятница','Суббота','Воскресенье'];
+  const MONTHS = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+  const dateStr = `${now.getDate()} ${MONTHS[now.getMonth()]}, ${DAYS_FULL[todayIdx]}`;
+
+  const visibleChildren = isParent ? children : children.filter(c=>c.id===myChildId);
+
+  // Today's lessons across visible children
+  const todayLessons = [];
+  visibleChildren.forEach(ch => {
+    ch.lessons.filter(l=>l.day===todayIdx).sort((a,b)=>a.row-b.row).forEach(l => {
+      todayLessons.push({...l, child:ch});
+    });
+  });
+
+  // Unread notifications for visible children
+  const myNotifs = isParent
+    ? notifications.filter(n=>!n.read)
+    : notifications.filter(n=>!n.read && n.childId===myChildId);
+
+  // Nearest vacation
+  const allVacDates = [];
+  visibleChildren.forEach(ch => ch.vacations.forEach(v => {
+    if (v.start >= todayStr) allVacDates.push({...v, child:ch});
+  }));
+  allVacDates.sort((a,b)=>a.start.localeCompare(b.start));
+  const nextVac = allVacDates[0];
+  const daysToVac = nextVac ? Math.max(0,Math.ceil((new Date(nextVac.start)-now)/(1000*60*60*24))) : null;
+
+  return (
+    <div className="space-y-5">
+      {/* Header greeting */}
+      <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-2xl p-5 text-white shadow-lg">
+        <p className="text-blue-200 text-sm">{greeting} 👋</p>
+        <h2 className="text-2xl font-bold mt-1">{user.name}</h2>
+        <p className="text-blue-200 text-sm mt-1">{dateStr}</p>
+
+        {nextVac && (
+          <div className="mt-3 bg-white/15 rounded-xl px-4 py-2 flex items-center justify-between">
+            <span className="text-sm">🏖️ До каникул {nextVac.child?.name && isParent ? `(${nextVac.child.name})` : ''}</span>
+            <span className="font-bold text-lg">{daysToVac === 0 ? 'Сегодня!' : `${daysToVac} дн.`}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Unread notifications alert */}
+      {myNotifs.length > 0 && (
+        <button onClick={()=>setActiveTab('notifications')} className="w-full bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-3 hover:bg-amber-100 transition-colors text-left">
+          <span className="text-2xl">🔔</span>
+          <div className="flex-1">
+            <div className="font-semibold text-amber-800 text-sm">Новые уведомления от школы</div>
+            <div className="text-amber-600 text-xs mt-0.5">{myNotifs[0].text.slice(0,60)}...</div>
+          </div>
+          <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">{myNotifs.length}</span>
+        </button>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        {/* Today's schedule */}
+        <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+            <h3 className="font-semibold text-gray-800">📅 Сегодня</h3>
+            <button onClick={()=>setActiveTab('schedule')} className="text-xs text-blue-500 hover:text-blue-700">Все →</button>
+          </div>
+          {todayLessons.length === 0 ? (
+            <div className="p-6 text-center text-gray-400 text-sm">
+              {todayIdx >= 5 ? '🎉 Выходной!' : 'Уроков нет'}
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-50 max-h-64 overflow-y-auto">
+              {todayLessons.map((l,i)=>{
+                const c = COLORS[l.child.color];
+                return (
+                  <div key={i} className="flex items-center gap-3 px-4 py-2.5">
+                    <span className="text-xs font-mono text-gray-400 w-12">{TIME_SLOTS[l.row]}</span>
+                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${c.bg}`}/>
+                    <span className="flex-1 text-sm text-gray-800">{l.name}</span>
+                    {isParent && <span className={`text-xs px-1.5 py-0.5 rounded-full ${c.light} ${c.text}`}>{l.child.name}</span>}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Children summary (parents) / My info (child) */}
+        <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+            <h3 className="font-semibold text-gray-800">
+              {isParent ? '👨‍👩‍👧‍👦 Дети' : '📊 Моя успеваемость'}
+            </h3>
+            <button onClick={()=>setActiveTab('grades')} className="text-xs text-blue-500 hover:text-blue-700">Подробнее →</button>
+          </div>
+          <div className="divide-y divide-gray-50">
+            {visibleChildren.map(ch=>{
+              const avg = getChildAvgScore(ch);
+              const c = COLORS[ch.color];
+              const todayCount = ch.lessons.filter(l=>l.day===todayIdx).length;
+              return (
+                <div key={ch.id} className="flex items-center gap-3 px-4 py-3">
+                  <div className={`w-9 h-9 rounded-full ${c.bg} text-white flex items-center justify-center text-sm font-bold`}>{ch.name[0]}</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-gray-800 text-sm">{ch.name}</div>
+                    <div className="text-xs text-gray-500">{ch.school} · {ch.class}</div>
+                  </div>
+                  <div className="text-right">
+                    <div className={`text-sm font-bold ${avg>=4.5?'text-green-600':avg>=3.5?'text-blue-600':avg>=2.5?'text-amber-600':'text-red-600'}`}>{avg||'—'}</div>
+                    <div className="text-xs text-gray-400">{todayCount} ур.</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Quick actions */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          {icon:'✏️',label:'Д/З',tab:'homework',color:'bg-violet-50 border-violet-200 text-violet-700'},
+          {icon:'📊',label:'Оценки',tab:'grades',color:'bg-blue-50 border-blue-200 text-blue-700'},
+          {icon:'💰',label:'Бюджет',tab:'budget',color:'bg-green-50 border-green-200 text-green-700'},
+          {icon:'📝',label:'Экзамены',tab:'exams',color:'bg-amber-50 border-amber-200 text-amber-700'},
+        ].map(a=>(
+          <button key={a.tab} onClick={()=>setActiveTab(a.tab)}
+            className={`${a.color} border rounded-xl py-4 flex flex-col items-center gap-1.5 hover:scale-105 transition-transform`}>
+            <span className="text-2xl">{a.icon}</span>
+            <span className="text-xs font-semibold">{a.label}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TAB: HOMEWORK
+// ═══════════════════════════════════════════════════════════════════════════════
+const HW_INITIAL = { c1:[], c2:[], c3:[], c4:[], c5:[] };
+
+function HomeworkTab({ children, updateChild, toast, isParent, myChildId }) {
+  const [hw, setHw] = useState(HW_INITIAL);
+  const [showAdd, setShowAdd] = useState(null);
+  const [selChild, setSelChild] = useState(isParent ? children[0]?.id : myChildId);
+
+  const visibleChildren = isParent ? children : children.filter(c=>c.id===myChildId);
+  const child = children.find(c=>c.id===selChild);
+
+  function addHw(childId, data) {
+    setHw(prev=>({...prev,[childId]:[{id:uid(),...data,done:false},...(prev[childId]||[])]}));
+    setShowAdd(null); toast('Задание добавлено ✓');
+  }
+  function toggleHw(childId, id) {
+    setHw(prev=>({...prev,[childId]:(prev[childId]||[]).map(h=>h.id===id?{...h,done:!h.done}:h)}));
+  }
+  function deleteHw(childId, id) {
+    setHw(prev=>({...prev,[childId]:(prev[childId]||[]).filter(h=>h.id!==id)}));
+    toast('Удалено');
+  }
+
+  const today = new Date().toISOString().slice(0,10);
+  const childHw = hw[selChild] || [];
+  const pending = childHw.filter(h=>!h.done).sort((a,b)=>a.due.localeCompare(b.due));
+  const done = childHw.filter(h=>h.done);
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-bold text-gray-800">✏️ Домашние задания</h2>
+      </div>
+
+      {/* Child selector */}
+      {isParent && (
+        <div className="flex gap-2 flex-wrap">
+          {children.map(ch=>(
+            <button key={ch.id} onClick={()=>setSelChild(ch.id)}
+              className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-sm font-medium transition-all ${selChild===ch.id?`${COLORS[ch.color].bg} text-white border-transparent`:'bg-white border-gray-200 text-gray-600 hover:border-gray-300'}`}>
+              {ch.name}
+              {(hw[ch.id]||[]).filter(h=>!h.done).length>0 &&
+                <span className={`text-xs px-1.5 rounded-full ${selChild===ch.id?'bg-white/30 text-white':'bg-red-100 text-red-600'}`}>
+                  {(hw[ch.id]||[]).filter(h=>!h.done).length}
+                </span>}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Add button */}
+      <div className="flex justify-end">
+        <Btn onClick={()=>setShowAdd(selChild)}>+ Задание</Btn>
+      </div>
+
+      {/* Pending */}
+      <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+        <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+          <h3 className="font-semibold text-gray-800">Не сделано</h3>
+          {pending.length>0 && <span className="bg-red-100 text-red-700 text-xs px-2 py-0.5 rounded-full font-medium">{pending.length}</span>}
+        </div>
+        {pending.length===0 && <p className="p-6 text-center text-gray-400 text-sm">🎉 Всё сделано!</p>}
+        <div className="divide-y divide-gray-50">
+          {pending.map(h=>{
+            const overdue = h.due < today;
+            return (
+              <div key={h.id} className="flex items-start gap-3 px-4 py-3 hover:bg-gray-50">
+                <button onClick={()=>toggleHw(selChild,h.id)}
+                  className="w-5 h-5 mt-0.5 rounded-full border-2 border-gray-300 hover:border-green-500 flex-shrink-0 transition-colors"/>
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-gray-800 text-sm">{h.subject}</div>
+                  <div className="text-gray-600 text-xs mt-0.5">{h.task}</div>
+                  <div className={`text-xs mt-1 font-medium ${overdue?'text-red-600':'text-gray-400'}`}>
+                    {overdue?'⚠️ Просрочено — ':'📅 '}{formatDate(h.due)}
+                  </div>
+                </div>
+                <button onClick={()=>deleteHw(selChild,h.id)} className="text-gray-300 hover:text-red-500 transition-colors text-lg">×</button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Done */}
+      {done.length>0 && (
+        <div className="bg-white rounded-xl shadow-sm overflow-hidden opacity-60">
+          <div className="px-4 py-3 border-b border-gray-100">
+            <h3 className="font-semibold text-gray-700">✅ Выполнено ({done.length})</h3>
+          </div>
+          <div className="divide-y divide-gray-50">
+            {done.map(h=>(
+              <div key={h.id} className="flex items-start gap-3 px-4 py-2.5">
+                <button onClick={()=>toggleHw(selChild,h.id)}
+                  className="w-5 h-5 mt-0.5 rounded-full bg-green-500 flex-shrink-0 flex items-center justify-center">
+                  <span className="text-white text-xs">✓</span>
+                </button>
+                <div className="flex-1">
+                  <div className="text-sm text-gray-500 line-through">{h.subject} — {h.task}</div>
+                </div>
+                <button onClick={()=>deleteHw(selChild,h.id)} className="text-gray-200 hover:text-red-400 text-lg">×</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {showAdd && child && (
+        <Modal title={`Задание — ${child.name}`} onClose={()=>setShowAdd(null)}>
+          <AddHwForm subjects={[...new Set(child.lessons.map(l=>l.name))]} onClose={()=>setShowAdd(null)} onSave={d=>addHw(showAdd,d)}/>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function AddHwForm({ subjects, onClose, onSave }) {
+  const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1);
+  const [form, setForm] = useState({subject:'', task:'', due:tomorrow.toISOString().slice(0,10)});
+  const set = k => e => setForm(f=>({...f,[k]:e.target.value}));
+  return (
+    <div className="space-y-3">
+      <div>
+        <Label>Предмет</Label>
+        {subjects.length>0 && (
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {subjects.map(s=>(
+              <button key={s} type="button" onClick={()=>setForm(f=>({...f,subject:s}))}
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all ${form.subject===s?'bg-blue-600 text-white border-blue-600':'bg-gray-50 text-gray-600 border-gray-200 hover:border-blue-400'}`}>
+                {s}
+              </button>
+            ))}
+          </div>
+        )}
+        <Input value={form.subject} onChange={set('subject')} placeholder="Математика"/>
+      </div>
+      <div><Label>Что нужно сделать</Label>
+        <textarea className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none" rows={3}
+          value={form.task} onChange={set('task')} placeholder="Страница 45, упражнение 3..."/></div>
+      <div><Label>Срок сдачи</Label><Input type="date" value={form.due} onChange={set('due')}/></div>
+      <div className="flex gap-2 pt-1">
+        <Btn onClick={()=>{if(form.subject&&form.task&&form.due) onSave(form);}}>Добавить</Btn>
+        <Btn variant="secondary" onClick={onClose}>Отмена</Btn>
+      </div>
+    </div>
+  );
+}
+
 // TAB: DINA SCHEDULE
 // ═══════════════════════════════════════════════════════════════════════════════
 const ALL_DAYS = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
@@ -2592,7 +2884,7 @@ function MainApp({ user, onLogout }) {
 
   const [children, setChildren] = useState(saved?.children || INITIAL_CHILDREN);
   const [notifications, setNotifications] = useState(saved?.notifications || INITIAL_NOTIFICATIONS);
-  const [activeTab, setActiveTab] = useState('schedule');
+  const [activeTab, setActiveTab] = useState('home');
   const [selectedChild, setSelectedChild] = useState((saved?.children || INITIAL_CHILDREN)[0].id);
   const [showAddChild, setShowAddChild] = useState(false);
   const [editingChild, setEditingChild] = useState(null); // child object being edited
@@ -2632,7 +2924,9 @@ function MainApp({ user, onLogout }) {
 
   // Tabs visible per role
   const ALL_TABS = [
-    { id:'schedule',     label:'Расписание',        icon:'📅' },
+    { id:'home',         label:'Главная',            icon:'🏠' },
+    { id:'schedule',     label:'Расписание',         icon:'📅' },
+    { id:'homework',     label:'Домашние задания',   icon:'✏️' },
     { id:'flights',      label:'Перелёты',           icon:'✈️' },
     { id:'vacations',    label:'Каникулы & Отпуск',  icon:'🏖️' },
     { id:'grades',       label:'Успеваемость',       icon:'📊' },
@@ -2750,6 +3044,12 @@ function MainApp({ user, onLogout }) {
 
       {/* Main content */}
       <main className="max-w-6xl mx-auto px-4 py-6">
+        {activeTab==='home' && (
+          <HomeTab children={children} user={user} isParent={isParent} myChildId={myChildId} notifications={notifications} setActiveTab={setActiveTab} toast={toast}/>
+        )}
+        {activeTab==='homework' && (
+          <HomeworkTab children={children} updateChild={updateChild} toast={toast} isParent={isParent} myChildId={myChildId}/>
+        )}
         {activeTab==='schedule' && (
           <ScheduleTab children={children} selectedChild={isParent?selectedChild:myChildId} setSelectedChild={setSelectedChild} updateChild={updateChild} toast={toast} isParent={isParent} myChildId={myChildId}/>
         )}
