@@ -491,7 +491,7 @@ const DAYS_SHORT = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'];
 // ─── INITIAL DATA ─────────────────────────────────────────────────────────────
 const INITIAL_CHILDREN = [
   {
-    id:'c1', name:'Ару', surname:'', class:'UCI', age:15, school:'UCI', color:'blue',
+    id:'c1', name:'Ару', surname:'', class:'Университет', age:15, school:'UCI', color:'blue',
     accessLevel:'suggest', accessToken:'tok-aru-001',
     lessons:[
       {id:'l1',row:0,day:0,name:'Алгебра',type:'school'},
@@ -513,7 +513,7 @@ const INITIAL_CHILDREN = [
     ],
   },
   {
-    id:'c2', name:'Мика', surname:'', class:'UCL', age:13, school:'UCL', color:'green',
+    id:'c2', name:'Мика', surname:'', class:'Университет', age:13, school:'UCL', color:'green',
     accessLevel:'suggest', accessToken:'tok-mika-002',
     lessons:[
       {id:'l7',row:0,day:0,name:'Математика',type:'school'},
@@ -1876,6 +1876,74 @@ function AddChildModal({ onClose, onSave }) {
   );
 }
 
+// ─── EDIT CHILD MODAL ─────────────────────────────────────────────────────────
+function EditChildModal({ child, onClose, onSave }) {
+  const CLASS_PRESETS = ['1А','1Б','2А','2Б','3А','3Б','4А','4Б','F4','5А','5Б','6А','7А','8А','9А','10А','11А','Университет','Садик','Другое'];
+  const SCHOOL_PRESETS = ['UCI','UCL','Concord','Нурорда','Spectrum','Мектеп №1','Мектеп №2','НИШ','БИЛ','Другое'];
+  const [form, setForm] = useState({ name:child.name, surname:child.surname, class:child.class, age:child.age, school:child.school, color:child.color });
+  const set = k => e => setForm(f=>({...f,[k]:e.target.value}));
+
+  return (
+    <Modal title={`Редактировать — ${child.name}`} onClose={onClose}>
+      <div className="space-y-4">
+
+        {/* Name */}
+        <div className="grid grid-cols-2 gap-3">
+          <div><Label>Имя</Label><Input value={form.name} onChange={set('name')}/></div>
+          <div><Label>Фамилия</Label><Input value={form.surname} onChange={set('surname')}/></div>
+        </div>
+
+        {/* Class with presets */}
+        <div>
+          <Label>Класс / курс</Label>
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {CLASS_PRESETS.map(p=>(
+              <button key={p} type="button" onClick={()=>setForm(f=>({...f,class:p}))}
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all ${form.class===p?'bg-blue-600 text-white border-blue-600':'bg-gray-50 text-gray-600 border-gray-200 hover:border-blue-400 hover:text-blue-600'}`}>
+                {p}
+              </button>
+            ))}
+          </div>
+          <Input value={form.class} onChange={set('class')} placeholder="Или введите вручную"/>
+        </div>
+
+        {/* School with presets */}
+        <div>
+          <Label>Школа / садик / университет</Label>
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {SCHOOL_PRESETS.map(p=>(
+              <button key={p} type="button" onClick={()=>setForm(f=>({...f,school:p}))}
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all ${form.school===p?'bg-blue-600 text-white border-blue-600':'bg-gray-50 text-gray-600 border-gray-200 hover:border-blue-400 hover:text-blue-600'}`}>
+                {p}
+              </button>
+            ))}
+          </div>
+          <Input value={form.school} onChange={set('school')} placeholder="Или введите вручную"/>
+        </div>
+
+        {/* Age */}
+        <div><Label>Возраст</Label><Input type="number" value={form.age} onChange={set('age')} placeholder="8"/></div>
+
+        {/* Color */}
+        <div>
+          <Label>Цвет</Label>
+          <div className="flex gap-2 mt-1">
+            {Object.entries(COLORS).map(([key,c])=>(
+              <button key={key} type="button" onClick={()=>setForm(f=>({...f,color:key}))}
+                className={`w-9 h-9 rounded-full ${c.bg} ring-2 ring-offset-2 transition-all ${form.color===key?'ring-gray-800 scale-110':'ring-transparent hover:scale-105'}`}/>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex gap-2 pt-1">
+          <Btn onClick={()=>onSave(form)}>Сохранить</Btn>
+          <Btn variant="secondary" onClick={onClose}>Отмена</Btn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // TAB: FLIGHTS (перелёты детей)
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -2603,6 +2671,7 @@ function MainApp({ user, onLogout }) {
   const [activeTab, setActiveTab] = useState('schedule');
   const [selectedChild, setSelectedChild] = useState((saved?.children || INITIAL_CHILDREN)[0].id);
   const [showAddChild, setShowAddChild] = useState(false);
+  const [editingChild, setEditingChild] = useState(null); // child object being edited
   const [toastMsg, setToastMsg] = useState(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
 
@@ -2673,7 +2742,13 @@ function MainApp({ user, onLogout }) {
             {isParent ? (
               <div className="flex items-center gap-2 ml-2">
                 {children.map(ch=>(
-                  <Avatar key={ch.id} child={ch} active={ch.id===selectedChild} onClick={()=>setSelectedChild(ch.id)}/>
+                  <div key={ch.id} className="relative group">
+                    <Avatar child={ch} active={ch.id===selectedChild} onClick={()=>setSelectedChild(ch.id)}/>
+                    <button
+                      onClick={()=>setEditingChild(ch)}
+                      className="absolute -top-1 -right-1 w-4 h-4 bg-gray-600 hover:bg-blue-600 text-white rounded-full text-xs hidden group-hover:flex items-center justify-center transition-colors"
+                      title="Редактировать">✏</button>
+                  </div>
                 ))}
                 <button onClick={()=>setShowAddChild(true)}
                   className="w-10 h-10 rounded-full border-2 border-dashed border-gray-300 text-gray-400 hover:border-blue-400 hover:text-blue-500 text-xl flex items-center justify-center transition-colors">+</button>
@@ -2681,7 +2756,7 @@ function MainApp({ user, onLogout }) {
             ) : myChild ? (
               <div className="flex items-center gap-2 ml-2">
                 <Avatar child={myChild} active size="md"/>
-                <span className="text-sm font-medium text-gray-700 hidden sm:block">{myChild.name} · {myChild.class}</span>
+                <span className="text-sm font-medium text-gray-700 hidden sm:block">{myChild.name} · {myChild.class} · {myChild.school}</span>
               </div>
             ) : null}
 
@@ -2781,6 +2856,17 @@ function MainApp({ user, onLogout }) {
       </main>
 
       {isParent && showAddChild && <AddChildModal onClose={()=>setShowAddChild(false)} onSave={addChild}/>}
+      {isParent && editingChild && (
+        <EditChildModal
+          child={editingChild}
+          onClose={()=>setEditingChild(null)}
+          onSave={form=>{
+            updateChild(editingChild.id, c=>({...c, ...form, age:parseInt(form.age)||c.age}));
+            setEditingChild(null);
+            toast(`${form.name} обновлён ✓`);
+          }}
+        />
+      )}
       {toastMsg && <Toast msg={toastMsg} onDone={()=>setToastMsg(null)}/>}
     </div>
   );
