@@ -124,15 +124,24 @@ async function hashPassword(password) {
 
 const AUTH_KEY = 'fsp_users';
 const SESSION_KEY = 'fsp_session';
+const SESSION_TTL = 30 * 24 * 60 * 60 * 1000; // 30 дней
 
 function getUsers() {
   try { return JSON.parse(localStorage.getItem(AUTH_KEY) || '[]'); } catch { return []; }
 }
 function saveUsers(users) { localStorage.setItem(AUTH_KEY, JSON.stringify(users)); }
 function getSession() {
-  try { return JSON.parse(localStorage.getItem(SESSION_KEY) || 'null'); } catch { return null; }
+  try {
+    const s = JSON.parse(localStorage.getItem(SESSION_KEY) || 'null');
+    if (!s) return null;
+    // Проверяем срок — 30 дней
+    if (s.expiresAt && Date.now() > s.expiresAt) { localStorage.removeItem(SESSION_KEY); return null; }
+    return s;
+  } catch { return null; }
 }
-function saveSession(user) { localStorage.setItem(SESSION_KEY, JSON.stringify(user)); }
+function saveSession(user) {
+  localStorage.setItem(SESSION_KEY, JSON.stringify({ ...user, expiresAt: Date.now() + SESSION_TTL }));
+}
 function clearSession() { localStorage.removeItem(SESSION_KEY); }
 
 // ─── ROLES CONFIG ────────────────────────────────────────────────────────────
@@ -148,32 +157,32 @@ const USER_ROLES = {
 
 const ALLOWED_EMAILS = Object.keys(USER_ROLES);
 
-async function registerUser(name, email, password) {
+// PIN — 4 цифры, хранятся хешем
+async function registerUser(name, email, pin) {
   const normalEmail = email.toLowerCase().trim();
   if (!ALLOWED_EMAILS.includes(normalEmail))
-    return { error: 'Этот email не имеет доступа к приложению. Обратитесь к администратору.' };
+    return { error: 'Нет доступа.' };
   const users = getUsers();
   if (users.find(u => u.email === normalEmail))
-    return { error: 'Пользователь с таким email уже зарегистрирован' };
-  const hash = await hashPassword(password);
+    return { error: 'Уже зарегистрирован' };
+  const hash = await hashPassword(pin);
   const roleInfo = USER_ROLES[normalEmail];
-  const displayName = roleInfo.label;
-  const user = { id: 'u-' + Date.now(), name: displayName, email: normalEmail, hash };
+  const user = { id: 'u-' + Date.now(), name: roleInfo.label, email: normalEmail, hash };
   saveUsers([...users, user]);
-  const session = { id: user.id, name: displayName, email: normalEmail, role: roleInfo.role, childId: roleInfo.childId };
+  const session = { id: user.id, name: roleInfo.label, email: normalEmail, role: roleInfo.role, childId: roleInfo.childId };
   saveSession(session);
   return { user: session };
 }
 
-async function loginUser(email, password) {
+async function loginUser(email, pin) {
   const normalEmail = email.toLowerCase().trim();
   if (!ALLOWED_EMAILS.includes(normalEmail))
-    return { error: 'Этот email не имеет доступа к приложению.' };
+    return { error: 'Нет доступа.' };
   const users = getUsers();
   const user = users.find(u => u.email === normalEmail);
-  if (!user) return { error: 'Пользователь не найден. Сначала зарегистрируйтесь.' };
-  const hash = await hashPassword(password);
-  if (hash !== user.hash) return { error: 'Неверный пароль' };
+  if (!user) return { error: 'not_registered' };
+  const hash = await hashPassword(pin);
+  if (hash !== user.hash) return { error: 'wrong_pin' };
   const roleInfo = USER_ROLES[normalEmail];
   const session = { id: user.id, name: roleInfo.label, email: normalEmail, role: roleInfo.role, childId: roleInfo.childId };
   saveSession(session);
@@ -198,26 +207,17 @@ async function loginWithGoogle(googleUser) {
   return { user: session };
 }
 
-// ─── GOOGLE CLIENT ID STORAGE ─────────────────────────────────────────────────
-const GID_KEY = 'fsp_google_client_id';
-function getStoredGoogleId() { return localStorage.getItem(GID_KEY) || ''; }
-function saveGoogleId(id) { localStorage.setItem(GID_KEY, id.trim()); }
-
 // ─── AUTH SCREEN ──────────────────────────────────────────────────────────────
 function AuthScreen({ onAuth }) {
-  const [step, setStep] = useState('pick'); // pick | password | register | googleSetup
+  const [step, setStep] = useState('pick'); // pick | pin | setpin | confirmpin
   const [selectedMember, setSelectedMember] = useState(null);
-  const [password, setPassword] = useState('');
-  const [confirm, setConfirm] = useState('');
+  const [pin, setPin] = useState('');
+  const [pinConfirm, setPinConfirm] = useState('');
+  const [settingPin, setSettingPin] = useState(false); // true = первый вход, вводим новый PIN
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showPass, setShowPass] = useState(false);
   const [passkeyUser, setPasskeyUser] = useState(null);
   const [faceLoading, setFaceLoading] = useState(false);
-  const [googleClientId, setGoogleClientId] = useState(getStoredGoogleId);
-  const [googleIdInput, setGoogleIdInput] = useState('');
-  const googleBtnRef = useRef(null);
-  const passRef = useRef(null);
 
   const MEMBERS = [
     {label:'Мама',  emoji:'👩', email:'dinka.musina@gmail.com',      bg:'from-rose-400 to-pink-500'},
@@ -228,239 +228,163 @@ function AuthScreen({ onAuth }) {
     {label:'Коси',  emoji:'🧒', email:'dinka.musinsa@gmail.com',      bg:'from-amber-400 to-orange-500'},
   ];
 
-  useEffect(() => {
-    if (passkeySupported()) setPasskeyUser(getPasskeyUser());
-  }, []);
+  useEffect(() => { if (passkeySupported()) setPasskeyUser(getPasskeyUser()); }, []);
 
-  // Init Google button when client ID available
-  useEffect(() => {
-    if (!googleClientId || step !== 'pick') return;
-    const tryInit = () => {
-      if (!window.google || !googleBtnRef.current) { setTimeout(tryInit, 400); return; }
-      window.google.accounts.id.initialize({
-        client_id: googleClientId,
-        callback: async (response) => {
-          setLoading(true); setError('');
-          try {
-            const payload = JSON.parse(atob(response.credential.split('.')[1]));
-            const result = await loginWithGoogle({ email: payload.email, picture: payload.picture });
-            if (result.error) { setError(result.error); setLoading(false); return; }
-            onAuth(result.user);
-          } catch { setError('Ошибка Google входа'); setLoading(false); }
-        },
-        auto_select: false,
-      });
-      window.google.accounts.id.renderButton(googleBtnRef.current, {
-        theme: 'outline', size: 'large', width: googleBtnRef.current.offsetWidth || 380,
-        text: 'signin_with', locale: 'ru', shape: 'rectangular',
-      });
-    };
-    tryInit();
-  }, [googleClientId, step]);
+  // PIN pad logic
+  const currentPin = step === 'confirmpin' ? pinConfirm : pin;
+  const setCurrentPin = step === 'confirmpin' ? setPinConfirm : setPin;
 
-  // Focus password after member pick
-  useEffect(() => {
-    if (step === 'password') setTimeout(() => passRef.current?.focus(), 100);
-  }, [step]);
+  function pressDigit(d) {
+    if (currentPin.length >= 4) return;
+    const next = currentPin + d;
+    setCurrentPin(next);
+    setError('');
+    if (next.length === 4) {
+      if (step === 'setpin') {
+        // First time — ask to confirm
+        setTimeout(() => { setStep('confirmpin'); setPinConfirm(''); }, 120);
+      } else if (step === 'confirmpin') {
+        // Confirm new PIN
+        if (next !== pin) { setError('PIN не совпадает'); setTimeout(()=>{ setPinConfirm(''); setPin(''); setStep('setpin'); },700); return; }
+        handleSetPin(pin);
+      } else {
+        // Login with PIN
+        setTimeout(() => handlePinLogin(next), 120);
+      }
+    }
+  }
+
+  function pressDelete() { setCurrentPin(p => p.slice(0,-1)); setError(''); }
 
   async function handleFaceId() {
-    if (!passkeyUser) return;
     setFaceLoading(true); setError('');
     try {
       const userId = await authenticateWithPasskey(passkeyUser.userId);
       if (!userId) throw new Error();
       const u = getUsers().find(u=>u.id===userId);
-      if (!u) throw new Error();
       const r = USER_ROLES[u.email];
       const session = { id:u.id, name:r.label, email:u.email, role:r.role, childId:r.childId };
       saveSession(session); onAuth(session);
-    } catch { setError('Face ID не подтверждён или отменён'); }
-    setFaceLoading(false);
+    } catch { setError('Face ID не подтверждён'); setFaceLoading(false); }
   }
 
-  async function handlePasswordSubmit(e) {
-    e.preventDefault(); setError('');
-    if (!password) { setError('Введите пароль'); return; }
+  async function handlePinLogin(enteredPin) {
     setLoading(true);
-    const result = await loginUser(selectedMember.email, password);
+    const result = await loginUser(selectedMember.email, enteredPin);
     setLoading(false);
-    if (result.error) { setError(result.error); return; }
+    if (result.error === 'wrong_pin') { setError('Неверный PIN'); setTimeout(()=>setPin(''),600); return; }
+    if (result.error) { setError(result.error); setTimeout(()=>setPin(''),600); return; }
     onAuth(result.user);
   }
 
-  async function handleRegister(e) {
-    e.preventDefault(); setError('');
-    if (password.length < 6) { setError('Пароль минимум 6 символов'); return; }
-    if (password !== confirm) { setError('Пароли не совпадают'); return; }
+  async function handleSetPin(newPin) {
     setLoading(true);
-    const result = await registerUser(selectedMember.email, selectedMember.email, password);
+    const result = await registerUser('', selectedMember.email, newPin);
     setLoading(false);
-    if (result.error) { setError(result.error); return; }
+    if (result.error) { setError(result.error); setPin(''); setPinConfirm(''); setStep('setpin'); return; }
     onAuth(result.user);
   }
 
-  function saveGoogleSetup() {
-    if (!googleIdInput.trim()) return;
-    saveGoogleId(googleIdInput.trim());
-    setGoogleClientId(googleIdInput.trim());
-    setStep('pick');
-    setGoogleIdInput('');
-  }
-
-  // ── STEP: PICK MEMBER ────────────────────────────────────────────────────────
+  // ── PICK MEMBER ──────────────────────────────────────────────────────────────
   if (step === 'pick') return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-950 to-indigo-950 flex items-center justify-center p-4">
-      <div className="w-full max-w-sm">
-        <div className="text-center mb-8">
+      <div className="w-full max-w-xs">
+        <div className="text-center mb-10">
           <div className="text-5xl mb-3">🏠</div>
           <h1 className="text-2xl font-bold text-white">Семейный планировщик</h1>
           <p className="text-blue-300 text-sm mt-1">Кто входит?</p>
         </div>
 
-        {/* Face ID */}
         {passkeyUser && passkeySupported() && (
           <button onClick={handleFaceId} disabled={faceLoading}
-            className="w-full mb-4 flex items-center justify-center gap-3 bg-white/10 hover:bg-white/20 border border-white/20 text-white font-semibold py-3.5 rounded-2xl transition-all backdrop-blur-sm">
+            className="w-full mb-5 flex items-center justify-center gap-3 bg-white/10 hover:bg-white/20 border border-white/20 text-white font-semibold py-3.5 rounded-2xl transition-all">
             <span className="text-xl">{faceLoading?'⏳':'🔒'}</span>
             <span className="text-sm">{faceLoading?'Подтвердите...':'Face ID / Touch ID'}</span>
           </button>
         )}
 
-        {/* Google Sign-In */}
-        {googleClientId ? (
-          <div ref={googleBtnRef} className="w-full mb-4 rounded-2xl overflow-hidden min-h-[48px]"/>
-        ) : (
-          <button onClick={()=>setStep('googleSetup')}
-            className="w-full mb-4 flex items-center justify-center gap-3 bg-white hover:bg-gray-50 text-gray-700 font-semibold py-3.5 rounded-2xl transition-all shadow-lg border border-gray-200">
-            <svg className="w-5 h-5" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
-            Войти через Google
-          </button>
-        )}
+        {error && <div className="bg-red-500/20 text-red-200 text-xs rounded-xl px-4 py-2 mb-4 text-center">⚠️ {error}</div>}
 
-        {error && <div className="bg-red-500/20 border border-red-400/30 text-red-200 text-xs rounded-xl px-4 py-3 mb-4 text-center">⚠️ {error}</div>}
-
-        {/* Member grid */}
         <div className="grid grid-cols-3 gap-3">
           {MEMBERS.map(m=>(
-            <button key={m.email} onClick={()=>{ setSelectedMember(m); setError(''); setPassword('');
-              const users = getUsers();
-              const exists = users.find(u=>u.email===m.email);
-              setStep(exists?'password':'register');
+            <button key={m.email} onClick={()=>{
+              setSelectedMember(m); setError(''); setPin(''); setPinConfirm('');
+              const exists = getUsers().find(u=>u.email===m.email);
+              setStep(exists ? 'pin' : 'setpin');
             }}
-              className={`bg-gradient-to-br ${m.bg} rounded-2xl p-4 flex flex-col items-center gap-2 shadow-lg hover:scale-105 transition-transform active:scale-95`}>
+              className={`bg-gradient-to-br ${m.bg} rounded-2xl p-4 flex flex-col items-center gap-2 shadow-lg hover:scale-105 active:scale-95 transition-transform`}>
               <span className="text-3xl">{m.emoji}</span>
-              <span className="text-white text-sm font-semibold">{m.label}</span>
+              <span className="text-white text-sm font-bold">{m.label}</span>
             </button>
           ))}
         </div>
-
-        {!googleClientId && (
-          <p className="text-center text-blue-400/60 text-xs mt-6 cursor-pointer hover:text-blue-300" onClick={()=>setStep('googleSetup')}>
-            ⚙️ Настроить Google вход
-          </p>
-        )}
       </div>
     </div>
   );
 
-  // ── STEP: PASSWORD ───────────────────────────────────────────────────────────
-  if (step === 'password') return (
+  // ── PIN PAD (login or set) ────────────────────────────────────────────────────
+  const isSetMode = step === 'setpin' || step === 'confirmpin';
+  const pinTitle = step==='setpin' ? 'Придумайте PIN-код' : step==='confirmpin' ? 'Повторите PIN-код' : `Добро пожаловать, ${selectedMember?.label}`;
+  const pinSub   = step==='setpin' ? 'Первый вход — выберите 4 цифры' : step==='confirmpin' ? 'Введите PIN ещё раз' : 'Введите ваш 4-значный PIN';
+
+  return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-950 to-indigo-950 flex items-center justify-center p-4">
-      <div className="w-full max-w-sm">
-        <button onClick={()=>{setStep('pick');setError('');}} className="text-blue-300 hover:text-white text-sm mb-6 flex items-center gap-1">
-          ← Назад
-        </button>
+      <div className="w-full max-w-xs">
+        <button onClick={()=>{setStep('pick');setPin('');setPinConfirm('');setError('');}}
+          className="text-blue-300 hover:text-white text-sm mb-6 flex items-center gap-1">← Назад</button>
+
         <div className="text-center mb-8">
-          <div className={`w-20 h-20 rounded-full bg-gradient-to-br ${selectedMember.bg} flex items-center justify-center text-4xl mx-auto mb-4 shadow-xl`}>
-            {selectedMember.emoji}
+          <div className={`w-20 h-20 rounded-full bg-gradient-to-br ${selectedMember?.bg} flex items-center justify-center text-4xl mx-auto mb-4 shadow-xl`}>
+            {selectedMember?.emoji}
           </div>
-          <h2 className="text-2xl font-bold text-white">{selectedMember.label}</h2>
-          <p className="text-blue-300 text-xs mt-1">{selectedMember.email}</p>
+          <h2 className="text-xl font-bold text-white">{pinTitle}</h2>
+          <p className="text-blue-300 text-xs mt-1">{pinSub}</p>
         </div>
-        <form onSubmit={handlePasswordSubmit} className="space-y-3">
-          <div className="relative">
-            <input ref={passRef} type={showPass?'text':'password'}
-              className="w-full bg-white/10 border border-white/20 text-white placeholder-white/40 rounded-2xl px-4 py-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 backdrop-blur-sm pr-12"
-              placeholder="Введите пароль" value={password} onChange={e=>setPassword(e.target.value)} autoComplete="current-password"/>
-            <button type="button" onClick={()=>setShowPass(s=>!s)} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/50 hover:text-white text-lg">{showPass?'🙈':'👁'}</button>
-          </div>
-          {error && <div className="bg-red-500/20 border border-red-400/30 text-red-200 text-xs rounded-xl px-4 py-3 text-center">⚠️ {error}</div>}
-          <button type="submit" disabled={loading}
-            className={`w-full bg-gradient-to-r ${selectedMember.bg} text-white font-bold py-4 rounded-2xl transition-all shadow-lg disabled:opacity-50 text-sm`}>
-            {loading?'⏳ Вход...':'Войти →'}
-          </button>
-        </form>
-      </div>
-    </div>
-  );
 
-  // ── STEP: REGISTER ───────────────────────────────────────────────────────────
-  if (step === 'register') return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-950 to-indigo-950 flex items-center justify-center p-4">
-      <div className="w-full max-w-sm">
-        <button onClick={()=>{setStep('pick');setError('');}} className="text-blue-300 hover:text-white text-sm mb-6 flex items-center gap-1">← Назад</button>
-        <div className="text-center mb-6">
-          <div className={`w-20 h-20 rounded-full bg-gradient-to-br ${selectedMember.bg} flex items-center justify-center text-4xl mx-auto mb-4 shadow-xl`}>
-            {selectedMember.emoji}
-          </div>
-          <h2 className="text-xl font-bold text-white">Первый вход — {selectedMember.label}</h2>
-          <p className="text-blue-300 text-xs mt-1">Придумайте пароль</p>
+        {/* PIN dots */}
+        <div className="flex justify-center gap-4 mb-8">
+          {[0,1,2,3].map(i=>(
+            <div key={i} className={`w-4 h-4 rounded-full transition-all duration-150 ${
+              currentPin.length > i
+                ? `bg-white scale-110`
+                : 'bg-white/20'
+            }`}/>
+          ))}
         </div>
-        <form onSubmit={handleRegister} className="space-y-3">
-          <div className="relative">
-            <input type={showPass?'text':'password'} ref={passRef}
-              className="w-full bg-white/10 border border-white/20 text-white placeholder-white/40 rounded-2xl px-4 py-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 backdrop-blur-sm pr-12"
-              placeholder="Пароль (минимум 6 символов)" value={password} onChange={e=>setPassword(e.target.value)} autoComplete="new-password"/>
-            <button type="button" onClick={()=>setShowPass(s=>!s)} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/50 hover:text-white text-lg">{showPass?'🙈':'👁'}</button>
-          </div>
-          <input type={showPass?'text':'password'}
-            className="w-full bg-white/10 border border-white/20 text-white placeholder-white/40 rounded-2xl px-4 py-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 backdrop-blur-sm"
-            placeholder="Повторите пароль" value={confirm} onChange={e=>setConfirm(e.target.value)} autoComplete="new-password"/>
-          {error && <div className="bg-red-500/20 border border-red-400/30 text-red-200 text-xs rounded-xl px-4 py-3 text-center">⚠️ {error}</div>}
-          <button type="submit" disabled={loading}
-            className={`w-full bg-gradient-to-r ${selectedMember.bg} text-white font-bold py-4 rounded-2xl transition-all shadow-lg disabled:opacity-50 text-sm`}>
-            {loading?'⏳ Создаю аккаунт...':'Создать аккаунт →'}
-          </button>
-        </form>
-      </div>
-    </div>
-  );
 
-  // ── STEP: GOOGLE SETUP ───────────────────────────────────────────────────────
-  if (step === 'googleSetup') return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-950 to-indigo-950 flex items-center justify-center p-4">
-      <div className="w-full max-w-sm">
-        <button onClick={()=>setStep('pick')} className="text-blue-300 hover:text-white text-sm mb-6 flex items-center gap-1">← Назад</button>
-        <div className="text-center mb-6">
-          <div className="text-4xl mb-3">🔵</div>
-          <h2 className="text-xl font-bold text-white">Настройка Google входа</h2>
+        {error && <div className="bg-red-500/20 text-red-200 text-xs rounded-xl px-4 py-2 mb-4 text-center">⚠️ {error}</div>}
+
+        {/* Numpad */}
+        <div className="grid grid-cols-3 gap-3">
+          {[1,2,3,4,5,6,7,8,9].map(d=>(
+            <button key={d} onClick={()=>pressDigit(String(d))} disabled={loading}
+              className="aspect-square rounded-2xl bg-white/10 hover:bg-white/20 active:bg-white/30 text-white text-2xl font-semibold transition-all active:scale-95 flex items-center justify-center">
+              {d}
+            </button>
+          ))}
+          <div/> {/* empty */}
+          <button onClick={()=>pressDigit('0')} disabled={loading}
+            className="aspect-square rounded-2xl bg-white/10 hover:bg-white/20 active:bg-white/30 text-white text-2xl font-semibold transition-all active:scale-95 flex items-center justify-center">
+            0
+          </button>
+          <button onClick={pressDelete}
+            className="aspect-square rounded-2xl bg-white/5 hover:bg-white/10 text-white/60 text-xl transition-all active:scale-95 flex items-center justify-center">
+            ⌫
+          </button>
         </div>
-        <div className="bg-white/10 border border-white/20 rounded-2xl p-5 text-sm text-blue-200 space-y-2 mb-5 backdrop-blur-sm">
-          <p className="font-semibold text-white">3 шага:</p>
-          <p>1. Откройте <a href="https://console.cloud.google.com" target="_blank" className="text-blue-300 underline">console.cloud.google.com</a></p>
-          <p>2. APIs → Credentials → Create OAuth 2.0 Client ID</p>
-          <p>3. Authorized JS origins: <span className="text-white font-mono text-xs">https://dinkamus.github.io</span></p>
-          <p className="pt-1">Скопируйте <span className="text-white font-semibold">Client ID</span> и вставьте ниже 👇</p>
-        </div>
-        <input
-          className="w-full bg-white/10 border border-white/20 text-white placeholder-white/40 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 mb-3"
-          placeholder="123456789-xxx.apps.googleusercontent.com"
-          value={googleIdInput} onChange={e=>setGoogleIdInput(e.target.value)}/>
-        <button onClick={saveGoogleSetup} disabled={!googleIdInput.trim()}
-          className="w-full bg-blue-500 hover:bg-blue-400 disabled:bg-blue-800 text-white font-bold py-3.5 rounded-2xl transition-all shadow-lg text-sm">
-          Сохранить и активировать Google вход ✓
-        </button>
-        {googleClientId && (
-          <button onClick={()=>{saveGoogleId('');setGoogleClientId('');setStep('pick');}}
-            className="w-full mt-2 text-red-400 hover:text-red-300 text-xs py-2">
-            Удалить сохранённый Client ID
+
+        {loading && <div className="text-center text-blue-300 text-sm mt-6">⏳ Входим...</div>}
+
+        {/* Face ID on PIN screen too */}
+        {step === 'pin' && passkeyUser && passkeySupported() && (
+          <button onClick={handleFaceId} disabled={faceLoading}
+            className="w-full mt-5 flex items-center justify-center gap-2 text-white/50 hover:text-white/80 text-sm transition-colors">
+            <span>🔒</span><span>{faceLoading ? 'Подтвердите...' : 'Face ID / Touch ID'}</span>
           </button>
         )}
       </div>
     </div>
   );
-
-  return null;
 }
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
