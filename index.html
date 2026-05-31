@@ -1070,11 +1070,80 @@ function VacationsTab({ children, updateChild, toast, isParent, myChildId }) {
   const prevMonth = () => { if (calMonth===0) { setCalYear(y=>y-1); setCalMonth(11); } else setCalMonth(m=>m-1); };
   const nextMonth = () => { if (calMonth===11) { setCalYear(y=>y+1); setCalMonth(0); } else setCalMonth(m=>m+1); };
 
-  // Count days until next vacation for each child
   const today = new Date().toISOString().slice(0,10);
+
+  // ── iCal export ──────────────────────────────────────────────────────────
+  function toIcalDate(iso) { return iso.replace(/-/g,''); }
+
+  function exportToCalendar() {
+    const lines = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//Семейный Планировщик//RU',
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH',
+      'X-WR-CALNAME:Семейный планировщик',
+      'X-WR-TIMEZONE:Asia/Almaty',
+    ];
+
+    // Каникулы каждого ребёнка
+    children.forEach(ch => {
+      ch.vacations.forEach(v => {
+        // iCal DTEND для all-day = день после окончания
+        const endDate = new Date(v.end + 'T00:00:00');
+        endDate.setDate(endDate.getDate() + 1);
+        const endIso = endDate.toISOString().slice(0,10).replace(/-/g,'');
+        lines.push(
+          'BEGIN:VEVENT',
+          `DTSTART;VALUE=DATE:${toIcalDate(v.start)}`,
+          `DTEND;VALUE=DATE:${endIso}`,
+          `SUMMARY:🏖️ Каникулы — ${ch.name} (${v.name})`,
+          `DESCRIPTION:Школа: ${ch.school}`,
+          `UID:vac-${v.id}@familyplanner`,
+          'END:VEVENT',
+        );
+      });
+    });
+
+    // Семейный отпуск
+    trips.forEach(t => {
+      const endDate = new Date(t.end + 'T00:00:00');
+      endDate.setDate(endDate.getDate() + 1);
+      const endIso = endDate.toISOString().slice(0,10).replace(/-/g,'');
+      lines.push(
+        'BEGIN:VEVENT',
+        `DTSTART;VALUE=DATE:${toIcalDate(t.start)}`,
+        `DTEND;VALUE=DATE:${endIso}`,
+        `SUMMARY:✈️ Отпуск: ${t.name}`,
+        `UID:trip-${t.id}@familyplanner`,
+        'END:VEVENT',
+      );
+    });
+
+    lines.push('END:VCALENDAR');
+
+    const blob = new Blob([lines.join('\r\n')], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'family-calendar.ics'; a.click();
+    URL.revokeObjectURL(url);
+    toast('Календарь скачан — откройте файл в Google/Apple Calendar ✓');
+  }
 
   return (
     <div className="space-y-6">
+      {/* Export button */}
+      <div className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl p-4 flex items-center justify-between shadow-sm">
+        <div>
+          <div className="text-white font-semibold text-sm">📲 Добавить в Google / Apple Calendar</div>
+          <div className="text-blue-100 text-xs mt-0.5">Скачает файл .ics со всеми каникулами и отпусками</div>
+        </div>
+        <button onClick={exportToCalendar}
+          className="bg-white text-blue-600 font-semibold text-sm px-4 py-2 rounded-xl hover:bg-blue-50 transition-all shadow-sm whitespace-nowrap">
+          ⬇ Скачать .ics
+        </button>
+      </div>
+
       {/* Calendar */}
       <div className="bg-white rounded-xl shadow-sm p-5">
         <div className="flex items-center justify-between mb-4">
