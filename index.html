@@ -330,6 +330,28 @@ function AuthScreen({ onAuth }) {
               <div className="flex-1 h-px bg-gray-100"/>
             </div>
 
+            {/* Quick pick — кто входит */}
+            {mode==='login' && (
+              <div>
+                <p className="text-xs font-medium text-gray-500 mb-2">Быстрый выбор</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    {label:'👩 Мама',   email:'dinka.musina@gmail.com',   color:'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100'},
+                    {label:'👨 Папа',   email:'baga.musin@gmail.com',     color:'bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100'},
+                    {label:'🧒 Ару',    email:'batyrbekaruzhan00@gmail.com', color:'bg-sky-50 border-sky-200 text-sky-700 hover:bg-sky-100'},
+                    {label:'🧒 Мика',   email:'batyrbekbirganym@gmail.com',  color:'bg-green-50 border-green-200 text-green-700 hover:bg-green-100'},
+                    {label:'🧒 Бони',   email:'batyrbekaldiyar2@gmail.com',  color:'bg-pink-50 border-pink-200 text-pink-700 hover:bg-pink-100'},
+                  ].map(u=>(
+                    <button key={u.email} type="button"
+                      onClick={()=>setEmail(u.email)}
+                      className={`border rounded-xl py-2 px-3 text-xs font-semibold transition-all ${u.color} ${email===u.email?'ring-2 ring-offset-1 ring-blue-400':''}`}>
+                      {u.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Email form */}
             <form onSubmit={handleSubmit} className="space-y-3">
               <div>
