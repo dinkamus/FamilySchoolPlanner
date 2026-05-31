@@ -969,7 +969,7 @@ function AddLessonModal({ onClose, onSave }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // TAB: VACATIONS & TRIPS
 // ═══════════════════════════════════════════════════════════════════════════════
-function VacationsTab({ children, updateChild, toast }) {
+function VacationsTab({ children, updateChild, toast, isParent, myChildId }) {
   const [calYear, setCalYear] = useState(2026);
   const [calMonth, setCalMonth] = useState(5); // June
   const [trips, setTrips] = useState(INITIAL_TRIPS);
@@ -2473,7 +2473,7 @@ function MainApp({ user, onLogout }) {
   const ALL_TABS = [
     { id:'schedule',     label:'Расписание',        icon:'📅' },
     { id:'flights',      label:'Перелёты',           icon:'✈️' },
-    { id:'vacations',    label:'Каникулы & Отпуск',  icon:'🏖️', parentOnly:true },
+    { id:'vacations',    label:'Каникулы & Отпуск',  icon:'🏖️' },
     { id:'grades',       label:'Успеваемость',       icon:'📊' },
     { id:'exams',        label:'Экзамены',           icon:'📝' },
     { id:'budget',       label:'Бюджет',             icon:'💰' },
@@ -2589,8 +2589,8 @@ function MainApp({ user, onLogout }) {
         {activeTab==='flights' && (
           <FlightsTab children={children} updateChild={updateChild} toast={toast} isParent={isParent} myChildId={myChildId}/>
         )}
-        {activeTab==='vacations' && isParent && (
-          <VacationsTab children={children} updateChild={updateChild} toast={toast}/>
+        {activeTab==='vacations' && (
+          <VacationsTab children={children} updateChild={updateChild} toast={toast} isParent={isParent} myChildId={myChildId}/>
         )}
         {activeTab==='grades' && (
           <GradesTab children={children} selectedChild={isParent?selectedChild:myChildId} setSelectedChild={setSelectedChild} updateChild={updateChild} toast={toast} isParent={isParent} myChildId={myChildId}/>
