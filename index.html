@@ -25,6 +25,182 @@
 <script type="text/babel">
 const { useState, useEffect, useCallback, useRef } = React;
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// AUTH — Web Crypto + localStorage
+// ═══════════════════════════════════════════════════════════════════════════════
+async function hashPassword(password) {
+  const msgBuffer = new TextEncoder().encode(password);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+  return Array.from(new Uint8Array(hashBuffer)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+const AUTH_KEY = 'fsp_users';
+const SESSION_KEY = 'fsp_session';
+
+function getUsers() {
+  try { return JSON.parse(localStorage.getItem(AUTH_KEY) || '[]'); } catch { return []; }
+}
+function saveUsers(users) { localStorage.setItem(AUTH_KEY, JSON.stringify(users)); }
+function getSession() {
+  try { return JSON.parse(localStorage.getItem(SESSION_KEY) || 'null'); } catch { return null; }
+}
+function saveSession(user) { localStorage.setItem(SESSION_KEY, JSON.stringify(user)); }
+function clearSession() { localStorage.removeItem(SESSION_KEY); }
+
+async function registerUser(name, email, password) {
+  const users = getUsers();
+  if (users.find(u => u.email.toLowerCase() === email.toLowerCase()))
+    return { error: 'Пользователь с таким email уже зарегистрирован' };
+  const hash = await hashPassword(password);
+  const user = { id: 'u-' + Date.now(), name, email: email.toLowerCase(), hash };
+  saveUsers([...users, user]);
+  const session = { id: user.id, name: user.name, email: user.email };
+  saveSession(session);
+  return { user: session };
+}
+
+async function loginUser(email, password) {
+  const users = getUsers();
+  const user = users.find(u => u.email === email.toLowerCase());
+  if (!user) return { error: 'Пользователь не найден' };
+  const hash = await hashPassword(password);
+  if (hash !== user.hash) return { error: 'Неверный пароль' };
+  const session = { id: user.id, name: user.name, email: user.email };
+  saveSession(session);
+  return { user: session };
+}
+
+// ─── AUTH SCREEN ──────────────────────────────────────────────────────────────
+function AuthScreen({ onAuth }) {
+  const [mode, setMode] = useState('login'); // login | register
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [showPass, setShowPass] = useState(false);
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError('');
+    if (!email || !password) { setError('Заполните все поля'); return; }
+    if (mode === 'register') {
+      if (!name.trim()) { setError('Введите ваше имя'); return; }
+      if (password.length < 6) { setError('Пароль минимум 6 символов'); return; }
+      if (password !== confirm) { setError('Пароли не совпадают'); return; }
+    }
+    setLoading(true);
+    const result = mode === 'login'
+      ? await loginUser(email, password)
+      : await registerUser(name.trim(), email, password);
+    setLoading(false);
+    if (result.error) { setError(result.error); return; }
+    onAuth(result.user);
+  }
+
+  function switchMode() {
+    setMode(m => m === 'login' ? 'register' : 'login');
+    setError(''); setName(''); setEmail(''); setPassword(''); setConfirm('');
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-rose-50 flex items-center justify-center p-4">
+      <div className="w-full max-w-md">
+        {/* Logo */}
+        <div className="text-center mb-8">
+          <div className="text-5xl mb-3">🏠</div>
+          <h1 className="text-2xl font-bold text-gray-800">Семейный планировщик</h1>
+          <p className="text-gray-500 text-sm mt-1">Расписание, каникулы, бюджет всей семьи</p>
+        </div>
+
+        {/* Card */}
+        <div className="bg-white rounded-2xl shadow-xl p-8">
+          <h2 className="text-xl font-semibold text-gray-800 mb-6">
+            {mode === 'login' ? 'Войти в аккаунт' : 'Создать аккаунт'}
+          </h2>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {mode === 'register' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Ваше имя</label>
+                <input
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
+                  placeholder="Дина"
+                  value={name} onChange={e=>setName(e.target.value)} autoComplete="name"
+                />
+              </div>
+            )}
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <input
+                type="email"
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
+                placeholder="dina@example.com"
+                value={email} onChange={e=>setEmail(e.target.value)} autoComplete="email"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Пароль</label>
+              <div className="relative">
+                <input
+                  type={showPass ? 'text' : 'password'}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 transition pr-12"
+                  placeholder={mode === 'register' ? 'Минимум 6 символов' : '••••••••'}
+                  value={password} onChange={e=>setPassword(e.target.value)} autoComplete={mode==='login'?'current-password':'new-password'}
+                />
+                <button type="button" onClick={()=>setShowPass(s=>!s)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-lg">
+                  {showPass ? '🙈' : '👁'}
+                </button>
+              </div>
+            </div>
+
+            {mode === 'register' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Повторите пароль</label>
+                <input
+                  type={showPass ? 'text' : 'password'}
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
+                  placeholder="••••••••"
+                  value={confirm} onChange={e=>setConfirm(e.target.value)} autoComplete="new-password"
+                />
+              </div>
+            )}
+
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">
+                ⚠️ {error}
+              </div>
+            )}
+
+            <button
+              type="submit" disabled={loading}
+              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-semibold py-3 rounded-xl transition-all text-sm shadow-sm mt-2">
+              {loading ? '⏳ Подождите...' : mode === 'login' ? 'Войти' : 'Зарегистрироваться'}
+            </button>
+          </form>
+
+          <div className="mt-6 text-center">
+            <span className="text-sm text-gray-500">
+              {mode === 'login' ? 'Ещё нет аккаунта? ' : 'Уже есть аккаунт? '}
+            </span>
+            <button onClick={switchMode} className="text-sm text-blue-600 hover:text-blue-800 font-medium">
+              {mode === 'login' ? 'Зарегистрироваться' : 'Войти'}
+            </button>
+          </div>
+        </div>
+
+        <p className="text-center text-xs text-gray-400 mt-6">
+          Данные хранятся только на вашем устройстве
+        </p>
+      </div>
+    </div>
+  );
+}
+
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
 const COLORS = {
   green:  { bg:'bg-green-500',  light:'bg-green-100',  text:'text-green-700',  border:'border-green-400',  hex:'#22c55e' },
@@ -1752,12 +1928,49 @@ function AddSpouseTripForm({ onClose, onSave }) {
 // MAIN APP
 // ═══════════════════════════════════════════════════════════════════════════════
 function App() {
-  const [children, setChildren] = useState(INITIAL_CHILDREN);
-  const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [authChecked, setAuthChecked] = useState(false);
+
+  useEffect(() => {
+    const session = getSession();
+    if (session) setCurrentUser(session);
+    setAuthChecked(true);
+  }, []);
+
+  function handleAuth(user) { setCurrentUser(user); }
+  function handleLogout() { clearSession(); setCurrentUser(null); }
+
+  if (!authChecked) return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="text-gray-400 text-lg">⏳ Загрузка...</div>
+    </div>
+  );
+
+  if (!currentUser) return <AuthScreen onAuth={handleAuth}/>;
+
+  return <MainApp user={currentUser} onLogout={handleLogout}/>;
+}
+
+function MainApp({ user, onLogout }) {
+  const storageKey = `fsp_data_${user.id}`;
+
+  function loadData() {
+    try { return JSON.parse(localStorage.getItem(storageKey) || 'null'); } catch { return null; }
+  }
+  function saveData(data) { localStorage.setItem(storageKey, JSON.stringify(data)); }
+
+  const saved = loadData();
+
+  const [children, setChildren] = useState(saved?.children || INITIAL_CHILDREN);
+  const [notifications, setNotifications] = useState(saved?.notifications || INITIAL_NOTIFICATIONS);
   const [activeTab, setActiveTab] = useState('schedule');
-  const [selectedChild, setSelectedChild] = useState(INITIAL_CHILDREN[0].id);
+  const [selectedChild, setSelectedChild] = useState((saved?.children || INITIAL_CHILDREN)[0].id);
   const [showAddChild, setShowAddChild] = useState(false);
   const [toastMsg, setToastMsg] = useState(null);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+
+  // Persist data on every change
+  useEffect(() => { saveData({ children, notifications }); }, [children, notifications]);
 
   function toast(msg) { setToastMsg(msg); }
 
@@ -1824,6 +2037,30 @@ function App() {
                   </div>
                 );
               })()}
+            </div>
+
+            {/* User menu */}
+            <div className="ml-auto relative">
+              <button onClick={()=>setShowUserMenu(s=>!s)}
+                className="flex items-center gap-2 bg-gray-100 hover:bg-gray-200 rounded-xl px-3 py-2 transition-colors">
+                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-rose-400 to-pink-600 text-white text-xs font-bold flex items-center justify-center">
+                  {user.name?.[0]?.toUpperCase() || '?'}
+                </div>
+                <span className="text-sm font-medium text-gray-700 hidden sm:block">{user.name}</span>
+                <span className="text-gray-400 text-xs">▾</span>
+              </button>
+              {showUserMenu && (
+                <div className="absolute right-0 top-full mt-2 bg-white rounded-xl shadow-xl border border-gray-100 py-2 w-48 z-50">
+                  <div className="px-4 py-2 border-b border-gray-100">
+                    <div className="text-sm font-semibold text-gray-800">{user.name}</div>
+                    <div className="text-xs text-gray-500 truncate">{user.email}</div>
+                  </div>
+                  <button onClick={()=>{ setShowUserMenu(false); onLogout(); }}
+                    className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2">
+                    🚪 Выйти из аккаунта
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
